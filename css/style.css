@@ -1,0 +1,46 @@
+/* 基础重置，防止移动端滚动条和点击高亮 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    font-family: sans-serif;
+    background-color: #1a1a1a; /* 文档建议的深色/聚会感 [cite: 3] */
+    color: white;
+    text-align: center;
+    padding: 20px;
+}
+
+/* 核心路由逻辑：隐藏所有页面 */
+.page {
+    display: none; 
+}
+
+/* 核心路由逻辑：显示激活的页面 */
+.page.active {
+    display: block; 
+    animation: fadeIn 0.3s ease-in-out; /* 加一点简单的转场动画 [cite: 3] */
+}
+
+/* 按钮基础样式 */
+button {
+    display: block;
+    width: 80%;
+    margin: 15px auto;
+    padding: 15px;
+    font-size: 18px;
+    background-color: #333;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* 简单的淡入动画 */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}

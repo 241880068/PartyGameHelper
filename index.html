@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>聚会发牌助手</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="home-page" class="page active">
+            <h1>聚会发牌助手</h1>
+            <div class="menu-buttons">
+                <button data-target="werewolf-page">🐺 狼人杀</button>
+                <button data-target="undercover-page">🕵️ 谁是卧底</button>
+                <button data-target="charades-page">🎭 你划我猜</button>
+            </div>
+        </div>
+
+        <div id="werewolf-page" class="page">
+            <h2>🐺 狼人杀</h2>
+            <div class="game-content">发牌区准备就绪...</div>
+            <button class="back-btn" data-target="home-page">返回主菜单</button>
+        </div>
+
+        <div id="undercover-page" class="page">
+            <h2>🕵️ 谁是卧底</h2>
+            <div class="game-content">发牌区准备就绪...</div>
+            <button class="back-btn" data-target="home-page">返回主菜单</button>
+        </div>
+
+        <div id="charades-page" class="page">
+            <h2>🎭 你划我猜</h2>
+            <div class="game-content">游戏区准备就绪...</div>
+            <button class="back-btn" data-target="home-page">返回主菜单</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
