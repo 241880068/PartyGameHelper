@@ -1,0 +1,52 @@
+{
+  "wordPairs": [
+    {
+      "civilian": "苹果",
+      "undercover": "梨"
+    },
+    {
+      "civilian": "牛奶",
+      "undercover": "豆浆"
+    },
+    {
+      "civilian": "可乐",
+      "undercover": "雪碧"
+    },
+    {
+      "civilian": "包子",
+      "undercover": "饺子"
+    },
+    {
+      "civilian": "火锅",
+      "undercover": "麻辣烫"
+    },
+    {
+      "civilian": "篮球",
+      "undercover": "足球"
+    },
+    {
+      "civilian": "手机",
+      "undercover": "平板电脑"
+    },
+    {
+      "civilian": "公交车",
+      "undercover": "地铁"
+    },
+    {
+      "civilian": "口红",
+      "undercover": "唇膏"
+    },
+    {
+      "civilian": "雨伞",
+      "undercover": "雨衣"
+    },
+    {
+      "civilian": "电影院",
+      "undercover": "剧院"
+    },
+    {
+      "civilian": "老师",
+      "undercover": "教练"
+    }
+  ]
+}
