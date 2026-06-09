@@ -1,2 +1,17 @@
-/*
+/
   Cache-Control: no-cache, no-store, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/js/*
+  Cache-Control: no-cache, must-revalidate
+
+/css/*
+  Cache-Control: no-cache, must-revalidate
+
+/game-data/*
+  Cache-Control: no-cache, must-revalidate
+
+/wolfcard/*
+  Cache-Control: public, max-age=31536000, immutable

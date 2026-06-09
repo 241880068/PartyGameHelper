@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 async function readJson(relativePath) {
@@ -45,4 +45,20 @@ test('werewolf data provides complete 6-12 player configurations', async () => {
     assert.ok((config['狼人'] ?? 0) >= 1);
     assert.ok((config['平民'] ?? 0) >= 1);
   }
+});
+
+test('every werewolf role image asset is available under an ASCII filename', async () => {
+  const filenames = [
+    'werewolf.jpg',
+    'seer.jpg',
+    'witch.jpg',
+    'hunter.jpg',
+    'guard.jpg',
+    'idiot.jpg',
+    'villager.jpg',
+  ];
+
+  await Promise.all(filenames.map((filename) => (
+    access(new URL(`../wolfcard/${filename}`, import.meta.url))
+  )));
 });
