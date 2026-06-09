@@ -10,7 +10,7 @@ const DATA_FILES = {
 const dataCache = new Map();
 
 export async function loadGameData(gameType, fetcher = globalThis.fetch) {
-  if (!Object.hasOwn(DATA_FILES, gameType)) {
+  if (!Object.prototype.hasOwnProperty.call(DATA_FILES, gameType)) {
     throw new TypeError(`Unsupported game type: ${gameType}`);
   }
   if (dataCache.has(gameType)) {

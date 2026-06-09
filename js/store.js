@@ -32,10 +32,18 @@ const initialState = {
 
 const listeners = new Set();
 
-export const store = structuredClone(initialState);
+function cloneState(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function hasOwn(target, property) {
+  return Object.prototype.hasOwnProperty.call(target, property);
+}
+
+export const store = cloneState(initialState);
 
 export function updateStore(section, patch) {
-  if (!Object.hasOwn(store, section)) {
+  if (!hasOwn(store, section)) {
     throw new TypeError(`Unknown store section: ${section}`);
   }
 
@@ -45,11 +53,11 @@ export function updateStore(section, patch) {
 }
 
 export function resetStoreSection(section) {
-  if (!Object.hasOwn(initialState, section)) {
+  if (!hasOwn(initialState, section)) {
     throw new TypeError(`Unknown store section: ${section}`);
   }
 
-  store[section] = structuredClone(initialState[section]);
+  store[section] = cloneState(initialState[section]);
   listeners.forEach((listener) => listener(section, store[section]));
   return store[section];
 }

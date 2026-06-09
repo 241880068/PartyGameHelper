@@ -44,6 +44,7 @@ const pageTitle = document.querySelector('#page-title');
 const backButton = document.querySelector('#back-button');
 const gestureControls = document.querySelector('#gesture-controls');
 const gestureStatus = document.querySelector('#gesture-status');
+const gestureEnable = document.querySelector('#gesture-enable');
 const feedbackFlash = document.querySelector('#feedback-flash');
 const modal = document.querySelector('#result-modal');
 
@@ -84,6 +85,7 @@ function bindEvents() {
   document.querySelector('#charades-start').addEventListener('click', startCharades);
   document.querySelector('#gesture-up').addEventListener('click', () => handleGesture('up'));
   document.querySelector('#gesture-down').addEventListener('click', () => handleGesture('down'));
+  gestureEnable.addEventListener('click', requestGesturePermission);
   document.querySelector('#result-confirm').addEventListener('click', () => {
     closeResult();
     currentResultAction();
@@ -127,7 +129,6 @@ function renderWerewolfPlayerOptions() {
 
 function navigate(gameType) {
   stopCharadesTimer();
-  gestureController?.requestPermission?.();
   store.app.activePage = gameType;
   pages.forEach((page) => page.classList.toggle('active', page.id === `page-${gameType}`));
   pageTitle.textContent = {
@@ -379,14 +380,40 @@ function handleGesture(direction) {
 function provideFeedback(direction) {
   feedbackFlash.className = `feedback-flash ${direction}`;
   window.setTimeout(() => { feedbackFlash.className = 'feedback-flash'; }, 300);
-  navigator.vibrate?.(direction === 'up' ? 55 : [35, 35, 35]);
+  if (navigator.vibrate) {
+    navigator.vibrate(direction === 'up' ? 55 : [35, 35, 35]);
+  }
 }
 
 function syncGestureStatus() {
-  const status = gestureController?.getStatus?.() ?? 'initializing';
+  const status = gestureController && gestureController.getStatus
+    ? gestureController.getStatus()
+    : 'initializing';
   updateStore('app', { gestureStatus: status });
   const active = status === 'active';
-  gestureStatus.textContent = active ? '体感操作已连接，按钮仍可备用' : '体感操作不可用，请使用按钮';
+  const needsPermission = status === 'permission-required'
+    || status === 'permission-denied'
+    || status === 'permission-error';
+  gestureEnable.classList.toggle('hidden', !needsPermission);
+  if (active) {
+    gestureStatus.textContent = '体感操作已连接，按钮仍可备用';
+  } else if (needsPermission) {
+    gestureStatus.textContent = '点击启用手机翻转，或直接使用下方按钮';
+  } else {
+    gestureStatus.textContent = '体感操作不可用，请使用按钮';
+  }
+}
+
+async function requestGesturePermission() {
+  gestureEnable.disabled = true;
+  gestureEnable.textContent = '正在请求权限…';
+  try {
+    await gestureController.requestPermission();
+  } finally {
+    gestureEnable.disabled = false;
+    gestureEnable.textContent = '启用手机翻转';
+    syncGestureStatus();
+  }
 }
 
 function showResult(icon, title, message, details = '') {

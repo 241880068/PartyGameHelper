@@ -218,6 +218,18 @@ main { width: min(100%, 620px); margin: 0 auto; padding: 4px 18px calc(112px + e
   backdrop-filter: blur(18px);
 }
 .gesture-controls p { margin: 0 0 8px; color: var(--muted); font-size: 11px; text-align: center; }
+.gesture-enable {
+  display: block;
+  width: min(100%, 584px);
+  min-height: 38px;
+  margin: 0 auto 8px;
+  border: 1px solid rgba(49,210,195,.5);
+  border-radius: 12px;
+  color: #bffaf3;
+  background: rgba(49,210,195,.13);
+  font-size: 13px;
+  font-weight: 800;
+}
 .gesture-controls > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 584px); margin: auto; }
 .gesture-button { min-height: 50px; border: 0; border-radius: 15px; font-size: 22px; font-weight: 900; }
 .gesture-button span { font-size: 14px; }
