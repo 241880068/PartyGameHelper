@@ -126,6 +126,7 @@ main { width: min(100%, 620px); margin: 0 auto; padding: 4px 18px calc(112px + e
   font-weight: 800;
   box-shadow: 0 12px 26px rgba(255,93,143,.22);
 }
+.primary-button:disabled { opacity: .65; cursor: wait; }
 .primary-button.cyan { background: linear-gradient(135deg, #12bfae, #3278dd); }
 .primary-button.orange { background: linear-gradient(135deg, #ff9f43, #ef586f); }
 

@@ -12,13 +12,13 @@ import { resetStoreSection, store, updateStore } from './store.js';
 import { shuffle } from './utils/shuffle.js';
 
 const ROLE_IMAGES = {
-  狼人: '狼人.jpg',
-  预言家: '预言家.jpg',
-  女巫: '女巫.jpg',
-  猎人: '猎人.jpg',
-  守卫: '守卫.jpg',
-  白痴: '丘比特.jpg',
-  平民: '村民.jpg',
+  狼人: 'werewolf.jpg',
+  预言家: 'seer.jpg',
+  女巫: 'witch.jpg',
+  猎人: 'hunter.jpg',
+  守卫: 'guard.jpg',
+  白痴: 'idiot.jpg',
+  平民: 'villager.jpg',
 };
 
 const ROLE_EMOJI = {
@@ -55,6 +55,8 @@ let selectedWerewolfPlayers = 6;
 let selectedCharadesDuration = 120;
 let currentResultAction = navigateHome;
 let charadesPausedForPortrait = false;
+let roleImageRenderId = 0;
+const roleImageCache = new Map();
 
 document.addEventListener('DOMContentLoaded', initialize);
 
@@ -161,10 +163,14 @@ function resetGameView(gameType) {
 }
 
 async function startWerewolf() {
+  const startButton = document.querySelector('#werewolf-start');
+  startButton.disabled = true;
+  startButton.textContent = '正在加载身份牌…';
   try {
     const data = await loadGameData('werewolf');
     const config = data.playerConfigs[String(selectedWerewolfPlayers)];
     const assignedRoles = createWerewolfDeck(config);
+    await preloadRoleImages(assignedRoles);
     updateStore('werewolf', {
       status: 'dealing',
       totalPlayers: selectedWerewolfPlayers,
@@ -178,6 +184,9 @@ async function startWerewolf() {
     saveProgress('werewolf', store.werewolf);
   } catch (error) {
     showError(error);
+  } finally {
+    startButton.disabled = false;
+    startButton.textContent = '随机发放身份';
   }
 }
 
@@ -217,15 +226,57 @@ function renderWerewolf() {
 
   const image = document.querySelector('#werewolf-role-image');
   const fallback = document.querySelector('#werewolf-role-fallback');
-  image.src = `./wolfcard/${ROLE_IMAGES[role] ?? ''}`;
+  const imageFile = ROLE_IMAGES[role];
+  const imageUrl = imageFile ? `./wolfcard/${imageFile}` : '';
+  const renderId = ++roleImageRenderId;
+
+  image.removeAttribute('src');
+  image.style.display = 'none';
   image.alt = `${role}身份牌`;
-  image.style.display = ROLE_IMAGES[role] ? '' : 'none';
   fallback.textContent = ROLE_EMOJI[role] ?? '🎴';
-  fallback.style.display = ROLE_IMAGES[role] ? 'none' : 'block';
+  fallback.style.display = 'block';
+
+  if (!imageUrl || roleImageCache.get(imageUrl) === false) {
+    return;
+  }
+
+  image.onload = () => {
+    if (renderId !== roleImageRenderId) return;
+    image.style.display = '';
+    fallback.style.display = 'none';
+  };
   image.onerror = () => {
+    if (renderId !== roleImageRenderId) return;
+    roleImageCache.set(imageUrl, false);
     image.style.display = 'none';
     fallback.style.display = 'block';
   };
+  image.src = imageUrl;
+}
+
+async function preloadRoleImages(roles) {
+  const urls = [...new Set(roles.map((role) => ROLE_IMAGES[role]).filter(Boolean))]
+    .map((fileName) => `./wolfcard/${fileName}`);
+  await Promise.all(urls.map(preloadImage));
+}
+
+function preloadImage(url) {
+  if (roleImageCache.has(url)) {
+    return Promise.resolve(roleImageCache.get(url));
+  }
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      roleImageCache.set(url, true);
+      resolve(true);
+    };
+    image.onerror = () => {
+      roleImageCache.set(url, false);
+      resolve(false);
+    };
+    image.src = url;
+  });
 }
 
 async function startUndercover() {
