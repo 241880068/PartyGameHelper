@@ -1,169 +1,423 @@
-// js/main.js
-
-// 1. 引入由 A同学(你) 维护的全局状态管理器
-import { store, subscribe } from './store.js';
-
-// 2. 引入 B同学 的手势模块 和 C同学 的游戏逻辑模块
-// 💡 提示：在团队联调前，确保这两个文件在对应路径下存在（即使里面是空函数也不会报错）
+import {
+  createCharadesDeck,
+  createUndercoverRound,
+  createWerewolfDeck,
+  getCharadesRecord,
+  loadGameData,
+  recordCharadesResult,
+  saveProgress,
+} from './gameLogic.js';
 import { initGestureRecognition } from './gesture.js';
-import { startNewGame, handleCharadesAnswer } from './gameLogic.js';
+import { resetStoreSection, store, updateStore } from './store.js';
+import { shuffle } from './utils/shuffle.js';
 
-document.addEventListener('DOMContentLoaded', () => {
-    
-    // ==========================================
-    // 核心模块一：单页面路由引擎 (Routing Engine)
-    // ==========================================
-    const navButtons = document.querySelectorAll('button[data-target]');
-    const pages = document.querySelectorAll('.page');
+const ROLE_IMAGES = {
+  狼人: '狼人.jpg',
+  预言家: '预言家.jpg',
+  女巫: '女巫.jpg',
+  猎人: '猎人.jpg',
+  守卫: '守卫.jpg',
+  白痴: '丘比特.jpg',
+  平民: '村民.jpg',
+};
 
-    /**
-     * 页面切换主函数
-     * @param {string} targetPageId - 目标页面的 DOM ID (例如: 'werewolf-page')
-     */
-    function navigateTo(targetPageId) {
-        // 第一步：隐藏所有页面
-        pages.forEach(page => page.classList.remove('active'));
+const ROLE_EMOJI = {
+  狼人: '🐺',
+  预言家: '🔮',
+  女巫: '🧪',
+  猎人: '🏹',
+  守卫: '🛡️',
+  白痴: '🃏',
+  平民: '👤',
+};
 
-        // 第二步：显示目标页面
-        const targetPage = document.getElementById(targetPageId);
-        if (targetPage) {
-            targetPage.classList.add('active');
-        } else {
-            console.error(`[路由错误] 找不到 ID 为 ${targetPageId} 的页面`);
-            return;
-        }
+const CATEGORY_LABELS = {
+  animals: '动物',
+  objects: '物品',
+  actions: '动作',
+  occupations: '职业',
+  entertainment: '娱乐',
+};
 
-        // 第三步：同步更新全局状态 Store
-        const routeName = targetPageId.replace('-page', ''); 
-        store.app.activePage = routeName;
-        console.log(`[路由更新] 当前所在页面: ${store.app.activePage}`);
+const pages = [...document.querySelectorAll('.page')];
+const pageTitle = document.querySelector('#page-title');
+const backButton = document.querySelector('#back-button');
+const gestureControls = document.querySelector('#gesture-controls');
+const gestureStatus = document.querySelector('#gesture-status');
+const feedbackFlash = document.querySelector('#feedback-flash');
+const modal = document.querySelector('#result-modal');
 
-        // 第四步：如果进入的是游戏页面，自动触发游戏初始化
-        if (routeName !== 'home') {
-            handleGamePageInit(routeName);
-        }
-    }
+let gestureController;
+let charadesTimer;
+let selectedWerewolfPlayers = 6;
+let selectedCharadesDuration = 120;
+let currentResultAction = navigateHome;
 
-    // 为所有带有 data-target 属性的按钮（主菜单按钮、返回按钮）绑定点击事件
-    navButtons.forEach(button => {
-        button.addEventListener('click', (event) => {
-            const targetPageId = event.currentTarget.getAttribute('data-target');
-            navigateTo(targetPageId);
-        });
+document.addEventListener('DOMContentLoaded', initialize);
+
+async function initialize() {
+  renderWerewolfPlayerOptions();
+  bindEvents();
+  updateBestScore();
+  gestureController = initGestureRecognition({
+    fallbackRoot: null,
+    onSwipeUp: () => handleGesture('up'),
+    onSwipeDown: () => handleGesture('down'),
+  });
+  syncGestureStatus();
+  window.setInterval(syncGestureStatus, 400);
+}
+
+function bindEvents() {
+  document.querySelectorAll('[data-game]').forEach((button) => {
+    button.addEventListener('click', () => navigate(button.dataset.game));
+  });
+  backButton.addEventListener('click', navigateHome);
+  document.querySelector('#werewolf-start').addEventListener('click', startWerewolf);
+  document.querySelector('#werewolf-card').addEventListener('click', () => handleGesture(
+    store.werewolf.revealed ? 'down' : 'up',
+  ));
+  document.querySelector('#undercover-start').addEventListener('click', startUndercover);
+  document.querySelector('#undercover-card').addEventListener('click', () => handleGesture(
+    store.undercover.revealed ? 'down' : 'up',
+  ));
+  document.querySelector('#charades-start').addEventListener('click', startCharades);
+  document.querySelector('#gesture-up').addEventListener('click', () => handleGesture('up'));
+  document.querySelector('#gesture-down').addEventListener('click', () => handleGesture('down'));
+  document.querySelector('#result-confirm').addEventListener('click', () => {
+    closeResult();
+    currentResultAction();
+  });
+
+  const playerRange = document.querySelector('#undercover-players');
+  const countRange = document.querySelector('#undercover-count');
+  playerRange.addEventListener('input', () => {
+    document.querySelector('#undercover-player-output').textContent = `${playerRange.value} 人`;
+    countRange.max = Math.max(1, Math.min(3, Number(playerRange.value) - 2));
+    if (Number(countRange.value) > Number(countRange.max)) countRange.value = countRange.max;
+    document.querySelector('#undercover-count-output').textContent = `${countRange.value} 人`;
+  });
+  countRange.addEventListener('input', () => {
+    document.querySelector('#undercover-count-output').textContent = `${countRange.value} 人`;
+  });
+
+  document.querySelectorAll('[data-duration]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-duration]').forEach((item) => item.classList.remove('selected'));
+      button.classList.add('selected');
+      selectedCharadesDuration = Number(button.dataset.duration);
     });
+  });
+}
 
-
-    // ==========================================
-    // 核心模块二：游戏初始化分发 (Game Initializer)
-    // ==========================================
-    /**
-     * 当路由切入具体游戏时，负责通知 C同学 初始化数据
-     * @param {string} gameType - 游戏类型 ('werewolf' | 'undercover' | 'charades')
-     */
-    function handleGamePageInit(gameType) {
-        console.log(`[游戏逻辑分发] 正在初始化游戏: ${gameType}`);
-        if (typeof startNewGame === 'function') {
-            startNewGame(gameType); // 调用C同学的接口
-        } else {
-            console.warn('⚠️ C同学的 startNewGame 逻辑暂未加载，当前使用跳过数据初始化。');
-        }
-    }
-
-
-    // ==========================================
-    // 核心模块三：动态数据渲染器 (Reactive UI Renderer)
-    // ==========================================
-    // 提前获取未来需要动态更新的 DOM 元素（这些元素将由 D同学 在 HTML 中具体实现）
-    const charadesScoreDisplay = document.querySelector('#charades-page .score');
-    const charadesWordDisplay = document.querySelector('#charades-page .current-word');
-    
-    const werewolfStatusDisplay = document.querySelector('#werewolf-page .game-content');
-    const undercoverStatusDisplay = document.querySelector('#undercover-page .game-content');
-
-    // 使用我们设计好的 subscribe 机制，只要 Store 里的数据变了，这里就会自动执行更新 UI
-    subscribe((property, value) => {
-        console.log(`[状态响应] 检测到 Store 属性【${property}】发生改变`);
-
-        // 3.1 处理「你划我猜」数据变化
-        if (property === 'charades') {
-            if (charadesScoreDisplay) {
-                charadesScoreDisplay.textContent = `当前得分: ${value.score}`;
-            }
-            if (charadesWordDisplay) {
-                const currentWord = value.wordList[value.currentIndex] || '游戏结束';
-                charadesWordDisplay.textContent = currentWord;
-            }
-        }
-
-        // 3.2 处理「狼人杀」分发牌进度展示
-        if (property === 'werewolf') {
-            if (werewolfStatusDisplay) {
-                if (value.status === 'dealing') {
-                    werewolfStatusDisplay.textContent = `请将手机传递给第 ${value.currentPlayerIndex + 1} 位玩家，向上翻转手机查看身份`;
-                } else if (value.status === 'finished') {
-                    werewolfStatusDisplay.textContent = '🎉 所有身份发放完毕，请开始口述发言！';
-                }
-            }
-        }
-
-        // 3.3 处理「谁是卧底」分发词语进度展示
-        if (property === 'undercover') {
-            if (undercoverStatusDisplay) {
-                if (value.status === 'dealing') {
-                    undercoverStatusDisplay.textContent = `请将手机传递给第 ${value.currentPlayerIndex + 1} 位玩家，向上翻转手机查看词语`;
-                } else if (value.status === 'finished') {
-                    undercoverStatusDisplay.textContent = '🎉 所有词语分发完毕，开始找出卧底！';
-                }
-            }
-        }
+function renderWerewolfPlayerOptions() {
+  const root = document.querySelector('#werewolf-player-options');
+  for (let count = 6; count <= 12; count += 1) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = `${count} 人`;
+    button.classList.toggle('selected', count === selectedWerewolfPlayers);
+    button.addEventListener('click', () => {
+      selectedWerewolfPlayers = count;
+      root.querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button));
     });
+    root.append(button);
+  }
+}
 
+function navigate(gameType) {
+  stopCharadesTimer();
+  gestureController?.requestPermission?.();
+  store.app.activePage = gameType;
+  pages.forEach((page) => page.classList.toggle('active', page.id === `page-${gameType}`));
+  pageTitle.textContent = {
+    werewolf: '狼人杀',
+    undercover: '谁是卧底',
+    charades: '你划我猜',
+  }[gameType];
+  backButton.classList.remove('hidden');
+  gestureControls.classList.toggle('hidden', gameType === 'home');
+  resetGameView(gameType);
+}
 
-    // ==========================================
-    // 核心模块四：手势输入与业务逻辑集成 (Integration Hub)
-    // ==========================================
-    // 在这里将 B同学 的物理手势与 C同学 的核心玩法规则完美粘合
-    if (typeof initGestureRecognition === 'function') {
-        initGestureRecognition({
-            // 物理手势 A：手机向上翻（>45°）-> 代表 “正确 / 同意 / 下一个 / 查看”
-            onSwipeUp: () => {
-                console.log('【物理手势触发】手机上翻 ↑');
-                const currentPage = store.app.activePage;
+function navigateHome() {
+  stopCharadesTimer();
+  store.app.activePage = 'home';
+  pages.forEach((page) => page.classList.toggle('active', page.id === 'page-home'));
+  pageTitle.textContent = '聚会游戏';
+  backButton.classList.add('hidden');
+  gestureControls.classList.add('hidden');
+  updateBestScore();
+}
 
-                // 区分场景处理：
-                // 1. 如果你在玩「你划我猜」
-                if (currentPage === 'charades' && store.charades.status === 'playing') {
-                    if (typeof handleCharadesAnswer === 'function') {
-                        handleCharadesAnswer(true); // 答对：通知C同学加分并切词
-                    }
-                } 
-                // 2. 如果你在玩「狼人杀」传阅身份阶段
-                else if (currentPage === 'werewolf' && store.werewolf.status === 'dealing') {
-                    console.log(`[通知UI] 翻转卡片，展示第 ${store.werewolf.currentPlayerIndex + 1} 个人的身份`);
-                    // 这里可以调用 D同学 的卡片翻转动效类名，例如 card.classList.add('flipped');
-                }
-            },
+function resetGameView(gameType) {
+  resetStoreSection(gameType);
+  document.querySelector(`#${gameType}-setup`).classList.remove('hidden');
+  document.querySelector(`#${gameType}-play`).classList.add('hidden');
+  document.querySelector(`#${gameType}-card`)?.classList.remove('revealed');
+}
 
-            // 物理手势 B：手机向下翻（>45°）-> 代表 “跳过 / 不同意 / 重新发牌 / 隐藏”
-            onSwipeDown: () => {
-                console.log('【物理手势触发】手机下翻 ↓');
-                const currentPage = store.app.activePage;
+async function startWerewolf() {
+  try {
+    const data = await loadGameData('werewolf');
+    const config = data.playerConfigs[String(selectedWerewolfPlayers)];
+    const assignedRoles = createWerewolfDeck(config);
+    updateStore('werewolf', {
+      status: 'dealing',
+      totalPlayers: selectedWerewolfPlayers,
+      assignedRoles,
+      currentPlayerIndex: 0,
+      revealed: false,
+    });
+    document.querySelector('#werewolf-setup').classList.add('hidden');
+    document.querySelector('#werewolf-play').classList.remove('hidden');
+    renderWerewolf();
+    saveProgress('werewolf', store.werewolf);
+  } catch (error) {
+    showError(error);
+  }
+}
 
-                // 区分场景处理：
-                if (currentPage === 'charades' && store.charades.status === 'playing') {
-                    if (typeof handleCharadesAnswer === 'function') {
-                        handleCharadesAnswer(false); // 跳过：通知C同学切词但不加分
-                    }
-                }
-                else if (currentPage === 'werewolf' && store.werewolf.status === 'dealing') {
-                    console.log(`[通知UI] 卡片盖回，隐藏身份，准备传递给下一个人`);
-                }
-            }
-        });
-        console.log("✅ 【集成功夫】手势识别与多游戏业务逻辑成功挂载！");
-    } else {
-        console.warn("⚠️ B同学的手势模块暂未导出，当前处于键盘模拟/虚拟按钮调试模式。");
-    }
+function handleWerewolf(direction) {
+  const game = store.werewolf;
+  if (game.status !== 'dealing') return;
 
-    console.log("🚀 聚会发牌助手主框架（A部分）全部加载完毕，等待联调！");
-});
+  if (direction === 'up' && !game.revealed) {
+    updateStore('werewolf', { revealed: true });
+    renderWerewolf();
+    return;
+  }
+  if (direction !== 'down' || !game.revealed) return;
+
+  const nextIndex = game.currentPlayerIndex + 1;
+  if (nextIndex >= game.totalPlayers) {
+    updateStore('werewolf', { status: 'finished', revealed: false });
+    showResult('🐺', '身份发放完成', '请收起手机，开始夜晚流程。');
+    return;
+  }
+  updateStore('werewolf', { currentPlayerIndex: nextIndex, revealed: false });
+  renderWerewolf();
+  saveProgress('werewolf', store.werewolf);
+}
+
+function renderWerewolf() {
+  const game = store.werewolf;
+  const role = game.assignedRoles[game.currentPlayerIndex];
+  const card = document.querySelector('#werewolf-card');
+  card.classList.toggle('revealed', game.revealed);
+  document.querySelector('#werewolf-player-label').textContent = `第 ${game.currentPlayerIndex + 1} 位玩家`;
+  document.querySelector('#werewolf-progress-label').textContent = `${game.currentPlayerIndex + 1} / ${game.totalPlayers}`;
+  document.querySelector('#werewolf-progress').style.width = `${((game.currentPlayerIndex + 1) / game.totalPlayers) * 100}%`;
+  document.querySelector('#werewolf-role-name').textContent = role;
+
+  const image = document.querySelector('#werewolf-role-image');
+  const fallback = document.querySelector('#werewolf-role-fallback');
+  image.src = `./wolfcard/${ROLE_IMAGES[role] ?? ''}`;
+  image.alt = `${role}身份牌`;
+  image.style.display = ROLE_IMAGES[role] ? '' : 'none';
+  fallback.textContent = ROLE_EMOJI[role] ?? '🎴';
+  fallback.style.display = ROLE_IMAGES[role] ? 'none' : 'block';
+  image.onerror = () => {
+    image.style.display = 'none';
+    fallback.style.display = 'block';
+  };
+}
+
+async function startUndercover() {
+  try {
+    const totalPlayers = Number(document.querySelector('#undercover-players').value);
+    const undercoverCount = Number(document.querySelector('#undercover-count').value);
+    const data = await loadGameData('undercover');
+    const round = createUndercoverRound(data.wordPairs, totalPlayers, undercoverCount);
+    updateStore('undercover', {
+      status: 'dealing',
+      totalPlayers,
+      undercoverCount,
+      assignedWords: round.assignedWords,
+      currentPlayerIndex: 0,
+      revealed: false,
+    });
+    document.querySelector('#undercover-setup').classList.add('hidden');
+    document.querySelector('#undercover-play').classList.remove('hidden');
+    renderUndercover();
+    saveProgress('undercover', store.undercover);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function handleUndercover(direction) {
+  const game = store.undercover;
+  if (game.status !== 'dealing') return;
+
+  if (direction === 'up' && !game.revealed) {
+    updateStore('undercover', { revealed: true });
+    renderUndercover();
+    return;
+  }
+  if (direction !== 'down' || !game.revealed) return;
+
+  const nextIndex = game.currentPlayerIndex + 1;
+  if (nextIndex >= game.totalPlayers) {
+    updateStore('undercover', { status: 'finished', revealed: false });
+    showResult('🕵️', '词语发放完成', '所有人依次描述自己的词语，找出卧底吧。');
+    return;
+  }
+  updateStore('undercover', { currentPlayerIndex: nextIndex, revealed: false });
+  renderUndercover();
+  saveProgress('undercover', store.undercover);
+}
+
+function renderUndercover() {
+  const game = store.undercover;
+  document.querySelector('#undercover-card').classList.toggle('revealed', game.revealed);
+  document.querySelector('#undercover-player-label').textContent = `第 ${game.currentPlayerIndex + 1} 位玩家`;
+  document.querySelector('#undercover-progress-label').textContent = `${game.currentPlayerIndex + 1} / ${game.totalPlayers}`;
+  document.querySelector('#undercover-progress').style.width = `${((game.currentPlayerIndex + 1) / game.totalPlayers) * 100}%`;
+  document.querySelector('#undercover-word').textContent = game.assignedWords[game.currentPlayerIndex];
+}
+
+async function startCharades() {
+  try {
+    const data = await loadGameData('charades');
+    const deck = createCharadesDeck(data.categories);
+    updateStore('charades', {
+      status: 'countdown',
+      duration: selectedCharadesDuration,
+      remainingSeconds: selectedCharadesDuration,
+      deck,
+      currentIndex: 0,
+      score: 0,
+      correctWords: [],
+      passedWords: [],
+    });
+    document.querySelector('#charades-setup').classList.add('hidden');
+    document.querySelector('#charades-play').classList.remove('hidden');
+    renderCharades();
+    await runCountdown();
+    updateStore('charades', { status: 'playing' });
+    startCharadesTimer();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function handleCharades(direction) {
+  const game = store.charades;
+  if (game.status !== 'playing') return;
+  const current = game.deck[game.currentIndex];
+  const correct = direction === 'up';
+  const nextIndex = game.currentIndex + 1;
+  const patch = {
+    currentIndex: nextIndex >= game.deck.length ? 0 : nextIndex,
+    score: game.score + (correct ? 1 : 0),
+    correctWords: correct ? [...game.correctWords, current.word] : game.correctWords,
+    passedWords: correct ? game.passedWords : [...game.passedWords, current.word],
+    deck: nextIndex >= game.deck.length ? shuffle(game.deck) : game.deck,
+  };
+  updateStore('charades', patch);
+  renderCharades();
+  saveProgress('charades', store.charades);
+}
+
+function renderCharades() {
+  const game = store.charades;
+  const current = game.deck[game.currentIndex];
+  document.querySelector('#charades-time').textContent = formatTime(game.remainingSeconds);
+  document.querySelector('#charades-score').textContent = String(game.score);
+  document.querySelector('#charades-word').textContent = current?.word ?? '准备开始';
+  document.querySelector('#charades-category').textContent = CATEGORY_LABELS[current?.category] ?? '题目';
+}
+
+function startCharadesTimer() {
+  stopCharadesTimer();
+  charadesTimer = window.setInterval(() => {
+    const remainingSeconds = Math.max(0, store.charades.remainingSeconds - 1);
+    updateStore('charades', { remainingSeconds });
+    renderCharades();
+    if (remainingSeconds === 0) finishCharades();
+  }, 1000);
+}
+
+function stopCharadesTimer() {
+  if (charadesTimer) {
+    window.clearInterval(charadesTimer);
+    charadesTimer = null;
+  }
+}
+
+function finishCharades() {
+  stopCharadesTimer();
+  updateStore('charades', { status: 'ended' });
+  const game = store.charades;
+  const record = recordCharadesResult({ score: game.score });
+  const details = game.correctWords.length
+    ? `猜对：${game.correctWords.join('、')}`
+    : '本轮还没有猜对词语，再来一次一定会更好。';
+  showResult('🎉', `本轮得分 ${game.score}`, `历史最佳 ${record.bestScore} 分`, details);
+}
+
+async function runCountdown() {
+  const overlay = document.querySelector('#countdown');
+  overlay.classList.remove('hidden');
+  for (const value of ['3', '2', '1', '开始']) {
+    overlay.textContent = value;
+    await wait(value === '开始' ? 500 : 800);
+  }
+  overlay.classList.add('hidden');
+}
+
+function handleGesture(direction) {
+  const page = store.app.activePage;
+  if (page === 'home') return;
+  provideFeedback(direction);
+  if (page === 'werewolf') handleWerewolf(direction);
+  if (page === 'undercover') handleUndercover(direction);
+  if (page === 'charades') handleCharades(direction);
+}
+
+function provideFeedback(direction) {
+  feedbackFlash.className = `feedback-flash ${direction}`;
+  window.setTimeout(() => { feedbackFlash.className = 'feedback-flash'; }, 300);
+  navigator.vibrate?.(direction === 'up' ? 55 : [35, 35, 35]);
+}
+
+function syncGestureStatus() {
+  const status = gestureController?.getStatus?.() ?? 'initializing';
+  updateStore('app', { gestureStatus: status });
+  const active = status === 'active';
+  gestureStatus.textContent = active ? '体感操作已连接，按钮仍可备用' : '体感操作不可用，请使用按钮';
+}
+
+function showResult(icon, title, message, details = '') {
+  document.querySelector('#result-icon').textContent = icon;
+  document.querySelector('#result-title').textContent = title;
+  document.querySelector('#result-message').textContent = message;
+  document.querySelector('#result-details').textContent = details;
+  modal.classList.remove('hidden');
+  currentResultAction = navigateHome;
+}
+
+function showError(error) {
+  console.error(error);
+  showResult('⚠️', '加载失败', '请通过本地服务器打开项目后重试。', error.message);
+}
+
+function closeResult() {
+  modal.classList.add('hidden');
+}
+
+function updateBestScore() {
+  const record = getCharadesRecord();
+  document.querySelector('#best-score').textContent = `${record.bestScore ?? 0} 分`;
+}
+
+function formatTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}

@@ -1,1158 +1,171 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>聚会游戏发牌助手</title>
-<style>
-/* ===== Reset & Base ===== */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body {
-  width: 100%; height: 100%;
-  font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
-  background: #fef6e4;
-  color: #333;
-  overflow: hidden;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-}
-body { display: flex; flex-direction: column; }
-
-/* ===== Color Palette (Dopamine) ===== */
-:root {
-  --pink: #ff6b9d;
-  --orange: #ff8a5c;
-  --yellow: #f9d342;
-  --cyan: #00bcd4;
-  --lime: #7bc67e;
-  --purple: #b388ff;
-  --bg: #fef6e4;
-  --card-bg: #ffffff;
-  --shadow: 0 8px 24px rgba(0,0,0,0.08);
-  --radius: 20px;
-  --radius-sm: 14px;
-  --safe-bottom: env(safe-area-inset-bottom, 16px);
-}
-
-/* ===== Page System ===== */
-.page {
-  display: none;
-  flex-direction: column;
-  height: 100vh;
-  width: 100%;
-  position: absolute;
-  top: 0; left: 0;
-  background: var(--bg);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.page.active { display: flex; }
-
-/* ===== Top Bar ===== */
-.top-bar {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  background: var(--bg);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  gap: 12px;
-  min-height: 52px;
-}
-.top-bar .back-btn {
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  border: none;
-  background: var(--pink);
-  color: #fff;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: transform 0.15s;
-}
-.top-bar .back-btn:active { transform: scale(0.9); }
-.top-bar h1 {
-  font-size: 22px;
-  font-weight: 800;
-  color: #333;
-  flex: 1;
-}
-
-/* ===== Content Area ===== */
-.content {
-  flex: 1;
-  padding: 16px;
-  padding-bottom: calc(16px + var(--safe-bottom));
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* ===== Bento Grid ===== */
-.bento-grid {
-  display: grid;
-  gap: 16px;
-  padding: 4px;
-}
-.bento-grid-2x2 { grid-template-columns: 1fr 1fr; }
-
-/* ===== Card ===== */
-.card {
-  background: var(--card-bg);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px 12px;
-  cursor: pointer;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-  aspect-ratio: 1 / 1;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-}
-.card:active { transform: scale(0.95); }
-.card .icon { font-size: 40px; margin-bottom: 8px; }
-.card .label {
-  font-size: 18px;
-  font-weight: 700;
-  color: #333;
-}
-.card .sub-label {
-  font-size: 13px;
-  color: #888;
-  margin-top: 4px;
-}
-
-/* Colorful card variants */
-.card-pink { background: linear-gradient(135deg, #ff6b9d, #ff8a80); color: #fff; }
-.card-orange { background: linear-gradient(135deg, #ff8a5c, #ffb74d); color: #fff; }
-.card-cyan { background: linear-gradient(135deg, #00bcd4, #4dd0e1); color: #fff; }
-.card-lime { background: linear-gradient(135deg, #7bc67e, #aed581); color: #fff; }
-.card-purple { background: linear-gradient(135deg, #b388ff, #ea80fc); color: #fff; }
-.card-yellow { background: linear-gradient(135deg, #f9d342, #fff176); color: #333; }
-.card-pink .label, .card-orange .label, .card-cyan .label, .card-lime .label, .card-purple .label { color: #fff; }
-.card-yellow .label { color: #333; }
-
-/* ===== Card Flip ===== */
-.card-flip-container {
-  perspective: 1000px;
-  width: 100%;
-  max-width: 320px;
-  margin: 0 auto;
-  aspect-ratio: 3 / 4;
-}
-.card-flip-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-style: preserve-3d;
-}
-.card-flip-inner.flipped { transform: rotateY(180deg); }
-.card-face {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  border-radius: var(--radius);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  text-align: center;
-  box-shadow: var(--shadow);
-}
-.card-face-front {
-  background: linear-gradient(145deg, #ff6b9d, #b388ff);
-  color: #fff;
-}
-.card-face-back {
-  background: linear-gradient(145deg, #00bcd4, #7bc67e);
-  color: #fff;
-  transform: rotateY(180deg);
-}
-.card-face .big-text {
-  font-size: 24px;
-  font-weight: 800;
-  line-height: 1.4;
-}
-.card-face .sub-text {
-  font-size: 16px;
-  margin-top: 12px;
-  opacity: 0.9;
-}
-.card-face .emoji-big { font-size: 56px; margin-bottom: 12px; }
-.card-face .role-img {
-  width: 80%;
-  aspect-ratio: 1 / 1;
-  object-fit: contain;
-  border-radius: 12px;
-  margin-bottom: 8px;
-}
-
-
-
-/* ===== Buttons ===== */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 28px;
-  border: none;
-  border-radius: 50px;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
-  min-width: 120px;
-}
-.btn:active { transform: scale(0.95); }
-.btn-pink { background: var(--pink); color: #fff; box-shadow: 0 4px 12px rgba(255,107,157,0.4); }
-.btn-cyan { background: var(--cyan); color: #fff; box-shadow: 0 4px 12px rgba(0,188,212,0.4); }
-.btn-orange { background: var(--orange); color: #fff; box-shadow: 0 4px 12px rgba(255,138,92,0.4); }
-.btn-lime { background: var(--lime); color: #fff; box-shadow: 0 4px 12px rgba(123,198,126,0.4); }
-.btn-yellow { background: var(--yellow); color: #333; box-shadow: 0 4px 12px rgba(249,211,66,0.4); }
-
-/* ===== Timer / Score Display ===== */
-.timer-display {
-  position: fixed;
-  top: 60px;
-  right: 16px;
-  background: var(--pink);
-  color: #fff;
-  padding: 8px 16px;
-  border-radius: 30px;
-  font-size: 20px;
-  font-weight: 800;
-  z-index: 50;
-  box-shadow: 0 4px 12px rgba(255,107,157,0.4);
-}
-.score-display {
-  position: fixed;
-  bottom: calc(100px + var(--safe-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--purple);
-  color: #fff;
-  padding: 10px 24px;
-  border-radius: 30px;
-  font-size: 18px;
-  font-weight: 700;
-  z-index: 50;
-  box-shadow: 0 4px 12px rgba(179,136,255,0.4);
-  white-space: nowrap;
-}
-
-/* ===== Countdown Overlay ===== */
-.countdown-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.6);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-}
-.countdown-overlay.show { display: flex; }
-.countdown-number {
-  font-size: 120px;
-  font-weight: 900;
-  color: #fff;
-  text-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  animation: countPop 0.8s ease-out;
-}
-@keyframes countPop {
-  0% { transform: scale(2); opacity: 0; }
-  50% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0.8; }
-}
-
-/* ===== Modal ===== */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 300;
-  padding: 24px;
-}
-.modal-overlay.show { display: flex; }
-.modal-box {
-  background: #fff;
-  border-radius: var(--radius);
-  padding: 32px 24px;
-  max-width: 340px;
-  width: 100%;
-  text-align: center;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.2);
-}
-.modal-box h2 { font-size: 24px; margin-bottom: 12px; }
-.modal-box p { font-size: 16px; color: #666; margin-bottom: 20px; line-height: 1.5; }
-
-/* ===== Word Tag (你划我猜) ===== */
-.word-tag {
-  display: inline-block;
-  background: var(--yellow);
-  color: #333;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 700;
-  position: fixed;
-  top: 60px;
-  left: 12px;
-  z-index: 50;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  max-width: 140px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: all 0.3s ease;
-}
-
-/* ===== Gyro Unavailable Banner ===== */
-.gyro-banner {
-  display: none;
-  background: #ff4444;
-  color: #fff;
-  text-align: center;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 700;
-  position: sticky;
-  top: 52px;
-  z-index: 20;
-}
-.gyro-banner.show { display: block; }
-
-/* ===== Game Action Area ===== */
-.game-action {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  padding: 20px 0;
-}
-.game-action .btn-row {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-/* ===== Utility ===== */
-.mt-8 { margin-top: 8px; }
-.mt-16 { margin-top: 16px; }
-.mt-24 { margin-top: 24px; }
-.mb-16 { margin-bottom: 16px; }
-.text-center { text-align: center; }
-.flex-center { display: flex; align-items: center; justify-content: center; }
-.w-full { width: 100%; }
-
-/* ===== Scrollbar Hide ===== */
-.content::-webkit-scrollbar { display: none; }
-
-/* ===== Responsive ===== */
-@media (min-width: 420px) {
-  .bento-grid-2x2 { grid-template-columns: 1fr 1fr; }
-  .card .icon { font-size: 48px; }
-  .card .label { font-size: 20px; }
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#151321">
+  <title>聚会游戏发牌助手</title>
+  <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
+  <div id="feedback-flash" class="feedback-flash" aria-hidden="true"></div>
 
-<!-- ===== Gyro Unavailable Banner ===== -->
-<div class="gyro-banner" id="gyro-banner">⚠️ 当前设备不支持陀螺仪，请使用支持手势的手机</div>
+  <header class="app-header">
+    <button id="back-button" class="icon-button hidden" type="button" aria-label="返回主页">←</button>
+    <div>
+      <p class="eyebrow">PARTY GAME HELPER</p>
+      <h1 id="page-title">聚会游戏</h1>
+    </div>
+    <div class="status-dot" title="纯前端，无需登录"></div>
+  </header>
 
-<!-- ===== HOME PAGE ===== -->
-<div id="page-home" class="page active">
-  <div class="top-bar">
-    <h1>🎉 聚会游戏</h1>
-    <div style="width:36px;"></div>
-  </div>
-  <div class="content">
-    <div class="bento-grid bento-grid-2x2">
-      <div class="card card-pink" onclick="navigateTo('werewolf')">
-        <div class="icon">🐺</div>
-        <div class="label">狼人杀</div>
+  <main>
+    <section id="page-home" class="page active" aria-labelledby="page-title">
+      <div class="hero">
+        <span class="hero-badge">一部手机，三种玩法</span>
+        <h2>把手机传起来，<br>让聚会马上开始。</h2>
+        <p>翻转手机完成操作，也可以使用屏幕按钮。</p>
       </div>
-      <div class="card card-cyan" onclick="navigateTo('spy')">
-        <div class="icon">🕵️</div>
-        <div class="label">谁是卧底</div>
+
+      <div class="game-grid">
+        <button class="game-card game-card-werewolf" type="button" data-game="werewolf">
+          <span class="game-icon">🐺</span>
+          <strong>狼人杀</strong>
+          <small>随机身份发牌 · 6–12 人</small>
+        </button>
+        <button class="game-card game-card-undercover" type="button" data-game="undercover">
+          <span class="game-icon">🕵️</span>
+          <strong>谁是卧底</strong>
+          <small>词语配对 · 隐私传阅</small>
+        </button>
+        <button class="game-card game-card-charades" type="button" data-game="charades">
+          <span class="game-icon">🎭</span>
+          <strong>你划我猜</strong>
+          <small>翻转判定 · 计时计分</small>
+        </button>
       </div>
-      <div class="card card-orange" onclick="navigateTo('charades')">
-        <div class="icon">🎭</div>
-        <div class="label">你划我猜</div>
+
+      <div class="record-card">
+        <span>历史最佳</span>
+        <strong id="best-score">0 分</strong>
       </div>
-      <div class="card card-purple" onclick="showComingSoon()">
-        <div class="icon">🎲</div>
-        <div class="label">其他</div>
-        <div class="sub-label">敬请期待</div>
+    </section>
+
+    <section id="page-werewolf" class="page" aria-label="狼人杀">
+      <div id="werewolf-setup" class="panel">
+        <p class="section-label">选择玩家人数</p>
+        <div id="werewolf-player-options" class="number-grid"></div>
+        <button id="werewolf-start" class="primary-button" type="button">随机发放身份</button>
       </div>
+      <div id="werewolf-play" class="play-area hidden">
+        <div class="progress-row">
+          <span id="werewolf-player-label">第 1 位玩家</span>
+          <span id="werewolf-progress-label">1 / 6</span>
+        </div>
+        <div class="progress-track"><i id="werewolf-progress"></i></div>
+        <button id="werewolf-card" class="flip-card" type="button" aria-label="查看或隐藏身份">
+          <span class="flip-card-inner">
+            <span class="card-face card-front">
+              <span class="card-symbol">↑</span>
+              <strong id="werewolf-front-title">向上翻转查看身份</strong>
+              <small>确保只有当前玩家能看到屏幕</small>
+            </span>
+            <span class="card-face card-back role-card">
+              <img id="werewolf-role-image" alt="">
+              <span id="werewolf-role-fallback" class="role-fallback">🐺</span>
+              <strong id="werewolf-role-name">狼人</strong>
+            </span>
+          </span>
+        </button>
+        <p id="werewolf-hint" class="gesture-hint">上翻查看，记住后下翻隐藏并传给下一位</p>
+      </div>
+    </section>
+
+    <section id="page-undercover" class="page" aria-label="谁是卧底">
+      <div id="undercover-setup" class="panel">
+        <label class="field-label" for="undercover-players">玩家人数</label>
+        <div class="range-row">
+          <input id="undercover-players" type="range" min="4" max="12" value="6">
+          <output id="undercover-player-output" for="undercover-players">6 人</output>
+        </div>
+        <label class="field-label" for="undercover-count">卧底人数</label>
+        <div class="range-row">
+          <input id="undercover-count" type="range" min="1" max="2" value="1">
+          <output id="undercover-count-output" for="undercover-count">1 人</output>
+        </div>
+        <button id="undercover-start" class="primary-button cyan" type="button">随机分配词语</button>
+      </div>
+      <div id="undercover-play" class="play-area hidden">
+        <div class="progress-row">
+          <span id="undercover-player-label">第 1 位玩家</span>
+          <span id="undercover-progress-label">1 / 6</span>
+        </div>
+        <div class="progress-track cyan"><i id="undercover-progress"></i></div>
+        <button id="undercover-card" class="flip-card" type="button" aria-label="查看或隐藏词语">
+          <span class="flip-card-inner">
+            <span class="card-face card-front cyan-face">
+              <span class="card-symbol">↑</span>
+              <strong>向上翻转查看词语</strong>
+              <small>不要让其他玩家看到</small>
+            </span>
+            <span class="card-face card-back word-card">
+              <span class="card-symbol">🗝️</span>
+              <small>你的词语是</small>
+              <strong id="undercover-word">苹果</strong>
+            </span>
+          </span>
+        </button>
+        <p id="undercover-hint" class="gesture-hint">上翻查看，记住后下翻隐藏并传给下一位</p>
+      </div>
+    </section>
+
+    <section id="page-charades" class="page" aria-label="你划我猜">
+      <div id="charades-setup" class="panel">
+        <p class="section-label">选择游戏时长</p>
+        <div class="duration-options">
+          <button type="button" data-duration="60">1 分钟</button>
+          <button type="button" data-duration="120" class="selected">2 分钟</button>
+          <button type="button" data-duration="180">3 分钟</button>
+        </div>
+        <button id="charades-start" class="primary-button orange" type="button">开始倒计时</button>
+      </div>
+      <div id="charades-play" class="charades-play hidden">
+        <div class="charades-stats">
+          <div><small>剩余时间</small><strong id="charades-time">02:00</strong></div>
+          <div><small>当前得分</small><strong id="charades-score">0</strong></div>
+        </div>
+        <div class="charades-word-card">
+          <small id="charades-category">题目</small>
+          <strong id="charades-word">准备开始</strong>
+        </div>
+        <div class="gesture-legend">
+          <span><b class="up">↑</b> 上翻 · 猜对</span>
+          <span><b class="down">↓</b> 下翻 · 跳过</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <section id="gesture-controls" class="gesture-controls hidden" aria-label="手势备用按钮">
+    <p id="gesture-status">体感操作不可用，请使用按钮</p>
+    <div>
+      <button id="gesture-down" type="button" class="gesture-button down">↓ <span>向下翻</span></button>
+      <button id="gesture-up" type="button" class="gesture-button up">↑ <span>向上翻</span></button>
+    </div>
+  </section>
+
+  <div id="countdown" class="countdown hidden" role="status" aria-live="assertive">3</div>
+
+  <div id="result-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
+    <div class="modal-card">
+      <span id="result-icon" class="result-icon">🎉</span>
+      <h2 id="result-title">本轮结束</h2>
+      <p id="result-message"></p>
+      <div id="result-details" class="result-details"></div>
+      <button id="result-confirm" class="primary-button" type="button">返回主页</button>
     </div>
   </div>
-</div>
 
-<!-- ===== WEREWOLF PAGE ===== -->
-<div id="page-werewolf" class="page">
-  <div class="top-bar">
-    <button class="back-btn" onclick="navigateTo('home')">←</button>
-    <h1>🐺 狼人杀</h1>
-  </div>
-  <div class="content" id="werewolf-content">
-    <!-- Player count selection -->
-    <div id="werewolf-select">
-      <p style="font-size:16px;font-weight:600;color:#888;margin-bottom:12px;">选择人数</p>
-      <div class="bento-grid bento-grid-2x2">
-        <div class="card card-pink" onclick="startWerewolf(6)">
-          <div class="icon">👥</div>
-          <div class="label">6人局</div>
-        </div>
-        <div class="card card-cyan" onclick="startWerewolf(9)">
-          <div class="icon">👥</div>
-          <div class="label">9人局</div>
-        </div>
-        <div class="card card-orange" onclick="startWerewolf(12)">
-          <div class="icon">👥</div>
-          <div class="label">12人局</div>
-        </div>
-        <div class="card card-purple" onclick="startWerewolf(12)">
-          <div class="icon">⚙️</div>
-          <div class="label">自定义</div>
-          <div class="sub-label">12人</div>
-        </div>
-      </div>
-    </div>
-    <!-- Dealing flow -->
-    <div id="werewolf-deal" style="display:none;">
-      <div class="game-action">
-        <div class="card-flip-container">
-          <div class="card-flip-inner" id="werewolf-card">
-            <div class="card-face card-face-front" id="werewolf-front">
-              <div class="emoji-big">🎴</div>
-              <div class="big-text" id="werewolf-front-text">发牌开始</div>
-            </div>
-            <div class="card-face card-face-back" id="werewolf-back">
-              <img class="role-img" id="werewolf-back-img" src="" alt="" onerror="this.style.display='none'">
-              <div class="emoji-big" id="werewolf-back-emoji" style="display:none;">🐺</div>
-              <div class="big-text" id="werewolf-back-text">狼人</div>
-            </div>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-pink" id="werewolf-skip-btn" onclick="werewolfNext()">我记住了</button>
-        </div>
-        <p id="werewolf-progress" style="font-size:14px;color:#888;font-weight:600;"></p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ===== SPY PAGE ===== -->
-<div id="page-spy" class="page">
-  <div class="top-bar">
-    <button class="back-btn" onclick="navigateTo('home')">←</button>
-    <h1>🕵️ 谁是卧底</h1>
-  </div>
-  <div class="content" id="spy-content">
-    <div id="spy-select">
-      <div class="card card-cyan" onclick="spyPromptPlayers()" style="max-width:200px;margin:40px auto;">
-        <div class="icon">👥</div>
-        <div class="label">人数</div>
-        <div class="sub-label">点击设置</div>
-      </div>
-    </div>
-    <div id="spy-deal" style="display:none;">
-      <div class="game-action">
-        <div class="card-flip-container">
-          <div class="card-flip-inner" id="spy-card">
-            <div class="card-face card-face-front" id="spy-front">
-              <div class="emoji-big">🎴</div>
-              <div class="big-text" id="spy-front-text">发牌开始</div>
-            </div>
-            <div class="card-face card-face-back" id="spy-back">
-              <div class="emoji-big" id="spy-back-emoji">🕵️</div>
-              <div class="big-text" id="spy-back-text">苹果</div>
-            </div>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button class="btn btn-cyan" id="spy-skip-btn" onclick="spyNext()">我记住了</button>
-        </div>
-        <p id="spy-progress" style="font-size:14px;color:#888;font-weight:600;"></p>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ===== CHARADES PAGE ===== -->
-<div id="page-charades" class="page">
-  <div class="top-bar">
-    <button class="back-btn" onclick="navigateTo('home')">←</button>
-    <h1>🎭 你划我猜</h1>
-  </div>
-  <div class="content" id="charades-content">
-    <div id="charades-select">
-      <p style="font-size:16px;font-weight:600;color:#888;margin-bottom:12px;">选择时长</p>
-      <div class="bento-grid bento-grid-2x2">
-        <div class="card card-pink" onclick="startCharades(1)">
-          <div class="icon">⏱️</div>
-          <div class="label">1分钟</div>
-        </div>
-        <div class="card card-cyan" onclick="startCharades(3)">
-          <div class="icon">⏱️</div>
-          <div class="label">3分钟</div>
-        </div>
-        <div class="card card-orange" onclick="startCharades(5)">
-          <div class="icon">⏱️</div>
-          <div class="label">5分钟</div>
-        </div>
-        <div class="card card-purple" onclick="charadesCustom()">
-          <div class="icon">⚙️</div>
-          <div class="label">自定义</div>
-        </div>
-      </div>
-    </div>
-    <div id="charades-game" style="display:none;">
-      <div id="charades-word-tags" style="display:none;"></div>
-      <div class="game-action" style="padding-top:60px;">
-        <div id="charades-word-display" style="font-size:48px;font-weight:900;color:#333;text-align:center;padding:40px 20px;min-height:120px;display:flex;align-items:center;justify-content:center;">
-          手机
-        </div>
-      </div>
-      <div class="timer-display" id="charades-timer">⏱️ 0:00</div>
-      <div class="score-display" id="charades-score">猜对数量：0</div>
-    </div>
-  </div>
-</div>
-
-<!-- ===== Countdown Overlay ===== -->
-<div class="countdown-overlay" id="countdown-overlay">
-  <div class="countdown-number" id="countdown-number">3</div>
-</div>
-
-<!-- ===== Modal ===== -->
-<div class="modal-overlay" id="modal-overlay">
-  <div class="modal-box">
-    <h2 id="modal-title">🎉</h2>
-    <p id="modal-text">内容</p>
-    <button class="btn btn-pink" onclick="closeModal()">确定</button>
-  </div>
-</div>
-
-<script>
-// ============================================================
-//  STATE & CONFIG
-// ============================================================
-const STATE = {
-  currentPage: 'home',
-  // Werewolf
-  ww: { roles: [], index: 0, flipped: false, done: false, started: false },
-  // Spy
-  spy: { players: 0, words: [], spyIndex: -1, index: 0, flipped: false, done: false, started: false },
-  // Charades
-  ch: { time: 0, words: [], index: 0, correct: 0, timer: null, running: false, correctWords: [] },
-  // Gyro
-  gyroAvailable: false,
-};
-
-// ============================================================
-//  WEREWOLF DATA
-// ============================================================
-const WEREWOLF_ROLES = {
-  6: ['狼人','狼人','预言家','女巫','猎人','平民'],
-  9: ['狼人','狼人','狼人','预言家','女巫','猎人','守卫','平民','平民'],
-  12: ['狼人','狼人','狼人','狼人','预言家','女巫','猎人','守卫','白痴','平民','平民','平民'],
-};
-
-const WEREWOLF_EMOJI = {
-  '狼人':'🐺','预言家':'🔮','女巫':'🧙','猎人':'🏹','守卫':'🛡️','白痴':'🤪','平民':'👤'
-};
-
-// ============================================================
-//  SPY WORD PAIRS
-// ============================================================
-const SPY_WORDS = [
-  ['苹果','香蕉'],
-  ['电脑','鼠标'],
-  ['牛奶','豆浆'],
-  ['钢笔','铅笔'],
-  ['沙发','椅子'],
-  ['西瓜','哈密瓜'],
-  ['眼镜','墨镜'],
-  ['火车','高铁'],
-  ['蛋糕','面包'],
-  ['雨伞','雨衣'],
-];
-
-// ============================================================
-//  CHARADES WORDS
-// ============================================================
-const CHARADES_WORDS = [
-  '手机','空调','大象','跳舞','自行车','太阳','月亮','星星','电脑','书本',
-  '吉他','篮球','游泳','飞机','火车','蛋糕','雨伞','眼镜','帽子','鞋子',
-  '熊猫','老虎','兔子','乌龟','金鱼','玫瑰','向日葵','钢琴','小提琴','相机',
-  '冰箱','洗衣机','电视','台灯','闹钟','钥匙','钱包','背包','地图','指南针',
-];
-
-// ============================================================
-//  GYROSCOPE CHECK
-// ============================================================
-function checkGyroAvailability() {
-  // Check if DeviceOrientationEvent exists and is not denied
-  if (typeof DeviceOrientationEvent === 'undefined') {
-    STATE.gyroAvailable = false;
-    document.getElementById('gyro-banner').classList.add('show');
-    return false;
-  }
-  // For iOS 13+, need to request permission
-  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    // We'll request on first user interaction
-    STATE.gyroAvailable = true; // optimistic, will be confirmed after request
-    return true;
-  }
-  STATE.gyroAvailable = true;
-  return true;
-}
-
-function requestGyroPermission() {
-  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission()
-      .then(state => {
-        if (state === 'granted') {
-          STATE.gyroAvailable = true;
-          document.getElementById('gyro-banner').classList.remove('show');
-          window.addEventListener('deviceorientation', handleOrientation);
-        } else {
-          STATE.gyroAvailable = false;
-          document.getElementById('gyro-banner').classList.add('show');
-        }
-      })
-      .catch(() => {
-        STATE.gyroAvailable = false;
-        document.getElementById('gyro-banner').classList.add('show');
-      });
-  } else if (window.DeviceOrientationEvent) {
-    window.addEventListener('deviceorientation', handleOrientation);
-    STATE.gyroAvailable = true;
-  } else {
-    STATE.gyroAvailable = false;
-    document.getElementById('gyro-banner').classList.add('show');
-  }
-}
-
-// ============================================================
-//  ORIENTATION HANDLING
-// ============================================================
-let lastGamma = null;
-const SWIPE_THRESHOLD = 15;
-
-function handleOrientation(event) {
-  if (event.gamma === null) return;
-  if (lastGamma === null) {
-    lastGamma = event.gamma;
-    return;
-  }
-  const diff = event.gamma - lastGamma;
-  if (diff > SWIPE_THRESHOLD) {
-    // Swipe right (tilt right) = swipe up action
-    triggerSwipeUp();
-    lastGamma = event.gamma;
-  } else if (diff < -SWIPE_THRESHOLD) {
-    // Swipe left (tilt left) = swipe down action
-    triggerSwipeDown();
-    lastGamma = event.gamma;
-  }
-}
-
-// ============================================================
-//  NAVIGATION
-// ============================================================
-function navigateTo(page) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  if (page === 'home') {
-    document.getElementById('page-home').classList.add('active');
-    STATE.currentPage = 'home';
-    stopCharadesTimer();
-    return;
-  }
-  const el = document.getElementById('page-' + page);
-  if (el) { el.classList.add('active'); STATE.currentPage = page; }
-}
-
-function showComingSoon() {
-  showModal('🎲 敬请期待', '更多精彩游戏即将上线，敬请期待！');
-}
-
-// ============================================================
-//  MODAL
-// ============================================================
-function showModal(title, text) {
-  document.getElementById('modal-title').textContent = title;
-  document.getElementById('modal-text').textContent = text;
-  document.getElementById('modal-overlay').classList.add('show');
-}
-function closeModal() {
-  document.getElementById('modal-overlay').classList.remove('show');
-}
-
-// ============================================================
-//  VIBRATE
-// ============================================================
-function vibrate() {
-  try { navigator.vibrate(50); } catch(e) {}
-}
-
-// ============================================================
-//  GESTURE INTEGRATION
-// ============================================================
-window.onSwipeUp = function() { triggerSwipeUp(); };
-window.onSwipeDown = function() { triggerSwipeDown(); };
-
-function triggerSwipeUp() {
-  vibrate();
-  window.dispatchEvent(new CustomEvent('swipeUp'));
-  const page = STATE.currentPage;
-  if (page === 'werewolf') werewolfNext();
-  else if (page === 'spy') spyNext();
-  else if (page === 'charades') charadesCorrect();
-}
-
-function triggerSwipeDown() {
-  vibrate();
-  window.dispatchEvent(new CustomEvent('swipeDown'));
-  const page = STATE.currentPage;
-  if (page === 'charades') charadesSkip();
-}
-
-// ============================================================
-//  WEREWOLF
-// ============================================================
-function startWerewolf(num) {
-  const roles = [...(WEREWOLF_ROLES[num] || WEREWOLF_ROLES[12])];
-  // Shuffle
-  for (let i = roles.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [roles[i], roles[j]] = [roles[j], roles[i]];
-  }
-  STATE.ww = { roles, index: 0, flipped: false, done: false, started: false };
-  document.getElementById('werewolf-select').style.display = 'none';
-  document.getElementById('werewolf-deal').style.display = 'block';
-  // Show "发牌开始" on front
-  document.getElementById('werewolf-card').classList.remove('flipped');
-  document.getElementById('werewolf-front-text').textContent = '发牌开始';
-  document.getElementById('werewolf-skip-btn').textContent = '开始';
-  document.getElementById('werewolf-progress').textContent = `共 ${roles.length} 位玩家`;
-
-}
-
-function werewolfNext() {
-  const ww = STATE.ww;
-  if (ww.done) {
-    navigateTo('home');
-    return;
-  }
-  if (!ww.started) {
-    // First click: start dealing - show first role
-    ww.started = true;
-    ww.flipped = true;
-    const role = ww.roles[ww.index];
-    document.getElementById('werewolf-card').classList.add('flipped');
-    showWerewolfRole(role);
-    // After "开始", first button is "我记住了"
-    document.getElementById('werewolf-skip-btn').textContent = '我记住了';
-
-    updateWerewolfProgress();
-    vibrate();
-    return;
-  }
-  // Toggle between showing role and advancing
-  if (ww.flipped) {
-    // Card is showing role - advance to next (hide card)
-    ww.flipped = false;
-    ww.index++;
-    document.getElementById('werewolf-card').classList.remove('flipped');
-    if (ww.index >= ww.roles.length) {
-      ww.done = true;
-      document.getElementById('werewolf-front-text').textContent = '🎉 发牌结束，游戏开始 🎉';
-      document.getElementById('werewolf-skip-btn').style.display = 'none';
-      document.getElementById('werewolf-progress').textContent = '';
-    } else {
-      document.getElementById('werewolf-front-text').textContent = '传递给下一位玩家吧';
-      // After "我记住了", next button is "翻牌"
-      document.getElementById('werewolf-skip-btn').textContent = '翻牌';
-
-      updateWerewolfProgress();
-    }
-    vibrate();
-  } else {
-    // Card is showing front - flip to reveal next role
-    ww.flipped = true;
-    const role = ww.roles[ww.index];
-    document.getElementById('werewolf-card').classList.add('flipped');
-    showWerewolfRole(role);
-    // After "翻牌", next button is "我记住了"
-    document.getElementById('werewolf-skip-btn').textContent = '我记住了';
-    updateWerewolfProgress();
-    vibrate();
-  }
-
-}
-
-
-
-
-// Map role names to image filenames
-const WEREWOLF_IMG_MAP = {
-  '狼人': '狼人',
-  '预言家': '预言家',
-  '女巫': '女巫',
-  '猎人': '猎人',
-  '守卫': '守卫',
-  '白痴': '丘比特', // map to available image
-  '平民': '村民',
-};
-
-// Per-role background colors (unified with image tones)
-const WEREWOLF_BG_COLORS = {
-  '狼人': 'linear-gradient(145deg, #2d1b1b, #5c3a3a)',
-  '预言家': 'linear-gradient(145deg, #1a237e, #3949ab)',
-  '女巫': 'linear-gradient(145deg, #4a148c, #7b1fa2)',
-  '猎人': 'linear-gradient(145deg, #1b5e20, #388e3c)',
-  '守卫': 'linear-gradient(145deg, #e65100, #f57c00)',
-  '白痴': 'linear-gradient(145deg, #880e4f, #ad1457)',
-  '平民': 'linear-gradient(145deg, #37474f, #546e7a)',
-};
-
-function showWerewolfRole(role) {
-  const img = document.getElementById('werewolf-back-img');
-  const emoji = document.getElementById('werewolf-back-emoji');
-  const text = document.getElementById('werewolf-back-text');
-  const backFace = document.getElementById('werewolf-back');
-  
-  // Set role-specific background color
-  backFace.style.background = WEREWOLF_BG_COLORS[role] || 'linear-gradient(145deg, #00bcd4, #7bc67e)';
-  
-  // Show text below image
-  text.style.display = '';
-  text.textContent = role;
-  
-  // Try to load image from wolfcard/ folder
-  const imgName = WEREWOLF_IMG_MAP[role] || role;
-  img.src = `wolfcard/${imgName}.jpg`;
-  img.style.display = '';
-  img.onerror = function() {
-    // Try .png as fallback
-    this.src = `wolfcard/${imgName}.png`;
-    this.onerror = function() {
-      // Image failed - show emoji + text fallback
-      this.style.display = 'none';
-      emoji.style.display = '';
-      emoji.textContent = WEREWOLF_EMOJI[role] || '👤';
-    };
-  };
-  img.onload = function() {
-    emoji.style.display = 'none';
-  };
-}
-
-
-
-
-function updateWerewolfProgress() {
-  const ww = STATE.ww;
-  const remaining = ww.roles.length - ww.index;
-  document.getElementById('werewolf-progress').textContent = `剩余 ${remaining} 位玩家`;
-}
-
-// ============================================================
-//  SPY
-// ============================================================
-function spyPromptPlayers() {
-  const input = prompt('请输入总人数（4~8人）：', '6');
-  const num = parseInt(input);
-  if (isNaN(num) || num < 4 || num > 8) {
-    showModal('⚠️ 输入有误', '请输入 4~8 之间的整数');
-    return;
-  }
-  startSpy(num);
-}
-
-function startSpy(num) {
-  // Pick random word pair
-  const pair = SPY_WORDS[Math.floor(Math.random() * SPY_WORDS.length)];
-  const spyIndex = Math.floor(Math.random() * num);
-  const words = [];
-  for (let i = 0; i < num; i++) {
-    words.push(i === spyIndex ? pair[1] : pair[0]);
-  }
-  // Shuffle positions
-  const indices = Array.from({length: num}, (_, i) => i);
-  for (let i = indices.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  const shuffledWords = indices.map(i => words[i]);
-  const newSpyIndex = shuffledWords.indexOf(pair[1]);
-
-  STATE.spy = { players: num, words: shuffledWords, spyIndex: newSpyIndex, index: 0, flipped: false, done: false, started: false };
-  document.getElementById('spy-select').style.display = 'none';
-  document.getElementById('spy-deal').style.display = 'block';
-  document.getElementById('spy-card').classList.remove('flipped');
-  document.getElementById('spy-front-text').textContent = '发牌开始';
-  document.getElementById('spy-skip-btn').textContent = '开始';
-  document.getElementById('spy-progress').textContent = `共 ${num} 位玩家`;
-
-}
-
-function spyNext() {
-  const spy = STATE.spy;
-  if (spy.done) {
-    navigateTo('home');
-    return;
-  }
-  if (!spy.started) {
-    // First click: start dealing - show first word
-    spy.started = true;
-    spy.flipped = true;
-    const word = spy.words[spy.index];
-    document.getElementById('spy-card').classList.add('flipped');
-    document.getElementById('spy-back-text').textContent = word;
-    // After "开始", first button is "我记住了"
-    document.getElementById('spy-skip-btn').textContent = '我记住了';
-
-    updateSpyProgress();
-    vibrate();
-    return;
-  }
-  // Toggle between showing word and advancing
-  if (spy.flipped) {
-    // Card is showing word - advance to next (hide card)
-    spy.flipped = false;
-    spy.index++;
-    document.getElementById('spy-card').classList.remove('flipped');
-    if (spy.index >= spy.players) {
-      spy.done = true;
-      document.getElementById('spy-front-text').textContent = '🎉 发牌结束，游戏开始 🎉';
-      document.getElementById('spy-skip-btn').style.display = 'none';
-      document.getElementById('spy-progress').textContent = '';
-    } else {
-      document.getElementById('spy-front-text').textContent = '传递给下一位玩家吧';
-      // After "我记住了", next button is "翻牌"
-      document.getElementById('spy-skip-btn').textContent = '翻牌';
-
-      updateSpyProgress();
-    }
-    vibrate();
-  } else {
-    // Card is showing front - flip to reveal next word
-    spy.flipped = true;
-    const word = spy.words[spy.index];
-    document.getElementById('spy-card').classList.add('flipped');
-    document.getElementById('spy-back-text').textContent = word;
-    // After "翻牌", next button is "我记住了"
-    document.getElementById('spy-skip-btn').textContent = '我记住了';
-    updateSpyProgress();
-    vibrate();
-  }
-
-}
-
-
-
-function updateSpyProgress() {
-  const spy = STATE.spy;
-  document.getElementById('spy-progress').textContent = `剩余 ${spy.players - spy.index} 位玩家`;
-}
-
-// ============================================================
-//  CHARADES
-// ============================================================
-function startCharades(minutes) {
-  if (STATE.ch.running) stopCharadesTimer();
-  const time = minutes * 60;
-  const words = [...CHARADES_WORDS];
-  for (let i = words.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [words[i], words[j]] = [words[j], words[i]];
-  }
-  STATE.ch = { time, words, index: 0, correct: 0, timer: null, running: false, correctWords: [] };
-  document.getElementById('charades-select').style.display = 'none';
-  document.getElementById('charades-game').style.display = 'block';
-  document.getElementById('charades-word-tags').style.display = 'none';
-  document.getElementById('charades-word-tags').innerHTML = '';
-  document.getElementById('charades-score').textContent = '猜对数量：0';
-  showCharadesCountdown();
-}
-
-function charadesCustom() {
-  const input = prompt('请输入分钟数（整数）：', '2');
-  const num = parseInt(input);
-  if (isNaN(num) || num < 1) {
-    showModal('⚠️ 输入有误', '请输入正整数');
-    return;
-  }
-  startCharades(num);
-}
-
-function showCharadesCountdown() {
-  const overlay = document.getElementById('countdown-overlay');
-  const numEl = document.getElementById('countdown-number');
-  let count = 3;
-  overlay.classList.add('show');
-  numEl.textContent = count;
-  numEl.style.animation = 'none';
-  setTimeout(() => numEl.style.animation = 'countPop 0.8s ease-out', 10);
-
-  const interval = setInterval(() => {
-    count--;
-    if (count > 0) {
-      numEl.textContent = count;
-      numEl.style.animation = 'none';
-      setTimeout(() => numEl.style.animation = 'countPop 0.8s ease-out', 10);
-    } else {
-      clearInterval(interval);
-      overlay.classList.remove('show');
-      beginCharadesGame();
-    }
-  }, 1000);
-}
-
-function beginCharadesGame() {
-  STATE.ch.running = true;
-  showCharadesWord();
-  startCharadesTimer();
-}
-
-function showCharadesWord() {
-  const ch = STATE.ch;
-  if (ch.index >= ch.words.length) {
-    // Refill words
-    const words = [...CHARADES_WORDS];
-    for (let i = words.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [words[i], words[j]] = [words[j], words[i]];
-    }
-    ch.words = words;
-    ch.index = 0;
-  }
-  const word = ch.words[ch.index];
-  const display = document.getElementById('charades-word-display');
-  display.textContent = word;
-  display.style.animation = 'none';
-  setTimeout(() => display.style.animation = 'wordPop 0.3s ease-out', 10);
-}
-
-// Add word pop animation
-const styleSheet = document.createElement('style');
-styleSheet.textContent = `
-@keyframes wordPop {
-  0% { transform: scale(0.5); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-`;
-document.head.appendChild(styleSheet);
-
-function charadesCorrect() {
-  if (!STATE.ch.running) return;
-  vibrate();
-  const ch = STATE.ch;
-  const word = ch.words[ch.index];
-  ch.correctWords.push(word);
-  ch.correct++;
-  ch.index++;
-  document.getElementById('charades-score').textContent = `猜对数量：${ch.correct}`;
-  // Add word tag
-  addCharadesWordTag(word);
-  showCharadesWord();
-}
-
-function charadesSkip() {
-  if (!STATE.ch.running) return;
-  vibrate();
-  const ch = STATE.ch;
-  ch.index++;
-  showCharadesWord();
-}
-
-function addCharadesWordTag(word) {
-  const container = document.getElementById('charades-word-tags');
-  container.style.display = 'block';
-  const tag = document.createElement('span');
-  tag.className = 'word-tag';
-  tag.textContent = `✅ ${word}`;
-  // Position it
-  const tags = container.querySelectorAll('.word-tag');
-  const top = 60 + tags.length * 36;
-  tag.style.top = top + 'px';
-  tag.style.left = (12 + Math.floor(tags.length / 6) * 150) + 'px';
-  container.appendChild(tag);
-}
-
-function startCharadesTimer() {
-  const ch = STATE.ch;
-  if (ch.timer) clearInterval(ch.timer);
-  ch.timer = setInterval(() => {
-    ch.time--;
-    updateCharadesTimerDisplay();
-    if (ch.time <= 0) {
-      stopCharadesTimer();
-      showModal('🎉 游戏结束！', `猜对 ${ch.correct} 个！`);
-      document.getElementById('modal-overlay').onclick = function() {
-        closeModal();
-        document.getElementById('modal-overlay').onclick = null;
-        resetCharades();
-      };
-    }
-  }, 1000);
-}
-
-function stopCharadesTimer() {
-  if (STATE.ch.timer) {
-    clearInterval(STATE.ch.timer);
-    STATE.ch.timer = null;
-  }
-  STATE.ch.running = false;
-}
-
-function updateCharadesTimerDisplay() {
-  const ch = STATE.ch;
-  const mins = Math.floor(ch.time / 60);
-  const secs = ch.time % 60;
-  document.getElementById('charades-timer').textContent = `⏱️ ${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-function resetCharades() {
-  stopCharadesTimer();
-  document.getElementById('charades-select').style.display = 'block';
-  document.getElementById('charades-game').style.display = 'none';
-  document.getElementById('charades-word-tags').innerHTML = '';
-  document.getElementById('charades-word-tags').style.display = 'none';
-}
-
-// ============================================================
-//  INIT
-// ============================================================
-document.addEventListener('DOMContentLoaded', function() {
-  checkGyroAvailability();
-  // Request gyro permission on first user interaction
-  document.addEventListener('click', function requestOnClick() {
-    requestGyroPermission();
-    document.removeEventListener('click', requestOnClick);
-  }, { once: true });
-});
-</script>
+  <script type="module" src="./js/main.js"></script>
 </body>
 </html>
