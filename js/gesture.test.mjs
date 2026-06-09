@@ -4,7 +4,27 @@ import test from 'node:test';
 
 const source = await readFile(new URL('./gesture.js', import.meta.url), 'utf8');
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
-const { createGestureDetector, initGestureRecognition } = await import(moduleUrl);
+const {
+    createGestureDetector,
+    getScreenPitchAngle,
+    initGestureRecognition,
+} = await import(moduleUrl);
+
+test('uses screen-relative up/down pitch in portrait', () => {
+    assert.equal(getScreenPitchAngle({ beta: 50, gamma: 10 }, 0), 50);
+    assert.equal(getScreenPitchAngle({ beta: 50, gamma: 10 }, 180), -50);
+});
+
+test('keeps up/down pitch semantics in both landscape directions', () => {
+    assert.equal(getScreenPitchAngle({ beta: 10, gamma: 50 }, 90), 50);
+    assert.equal(getScreenPitchAngle({ beta: 10, gamma: -50 }, 270), 50);
+    assert.equal(getScreenPitchAngle({ beta: 10, gamma: -50 }, -90), 50);
+});
+
+test('returns null when the required sensor axis is unavailable', () => {
+    assert.equal(getScreenPitchAngle({ beta: 50, gamma: null }, 90), null);
+    assert.equal(getScreenPitchAngle({ beta: null, gamma: 50 }, 0), null);
+});
 
 test('fires upward and downward gestures at the configured threshold', () => {
     const events = [];
