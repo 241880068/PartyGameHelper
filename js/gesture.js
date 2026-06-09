@@ -6,6 +6,23 @@ const SENSOR_START_TIMEOUT = 2000;
 function noop() {}
 
 /**
+ * Converts device-orientation angles into screen-relative up/down pitch.
+ * Portrait uses beta. In landscape, the same motion moves to the gamma axis,
+ * with sign correction so lifting the screen's top edge stays "up".
+ */
+export function getScreenPitchAngle({ beta, gamma }, screenAngle = 0) {
+    const normalizedAngle = ((Number(screenAngle) % 360) + 360) % 360;
+
+    if (normalizedAngle === 90) {
+        return Number.isFinite(gamma) ? gamma : null;
+    }
+    if (normalizedAngle === 270) {
+        return Number.isFinite(gamma) ? -gamma : null;
+    }
+    return null;
+}
+
+/**
  * Pure gesture state machine. Kept separate from browser APIs so the angle
  * detection and cooldown behavior can be tested independently.
  */
@@ -69,9 +86,9 @@ export function createGestureDetector({
 /**
  * Starts device-orientation gesture recognition.
  *
- * Positive beta angles are treated as an upward flip and negative beta
- * angles as a downward flip. The returned controller can be used by an
- * integration page or a standalone demo.
+ * Lifting the screen's top edge is treated as an upward action and lowering it
+ * as a downward action. Motion input is disabled in portrait; both landscape
+ * orientations are normalized to the same screen-relative up/down motion.
  */
 export function initGestureRecognition({
     onSwipeUp = noop,
@@ -116,7 +133,8 @@ export function initGestureRecognition({
     }
 
     function handleOrientation(event) {
-        if (!Number.isFinite(event.beta)) {
+        const screenPitchAngle = getScreenPitchAngle(event, getScreenAngle());
+        if (!Number.isFinite(screenPitchAngle)) {
             return;
         }
 
@@ -128,7 +146,7 @@ export function initGestureRecognition({
 
         status = 'active';
         removeFallback();
-        detector.update(event.beta);
+        detector.update(screenPitchAngle);
     }
 
     function handleVisibilityChange() {
@@ -263,6 +281,17 @@ export function initGestureRecognition({
         getStatus: () => status,
         isActive: () => status === 'active',
     };
+}
+
+function getScreenAngle() {
+    if (window.screen && window.screen.orientation
+        && Number.isFinite(window.screen.orientation.angle)) {
+        return window.screen.orientation.angle;
+    }
+    if (Number.isFinite(window.orientation)) {
+        return window.orientation;
+    }
+    return 0;
 }
 
 function createButton(label, className) {
