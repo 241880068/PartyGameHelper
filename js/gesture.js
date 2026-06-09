@@ -19,10 +19,7 @@ export function getScreenPitchAngle({ beta, gamma }, screenAngle = 0) {
     if (normalizedAngle === 270) {
         return Number.isFinite(gamma) ? -gamma : null;
     }
-    if (normalizedAngle === 180) {
-        return Number.isFinite(beta) ? -beta : null;
-    }
-    return Number.isFinite(beta) ? beta : null;
+    return null;
 }
 
 /**
@@ -90,8 +87,8 @@ export function createGestureDetector({
  * Starts device-orientation gesture recognition.
  *
  * Lifting the screen's top edge is treated as an upward action and lowering it
- * as a downward action. Portrait and both landscape orientations are
- * normalized to the same screen-relative up/down motion.
+ * as a downward action. Motion input is disabled in portrait; both landscape
+ * orientations are normalized to the same screen-relative up/down motion.
  */
 export function initGestureRecognition({
     onSwipeUp = noop,

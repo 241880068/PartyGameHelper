@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#151321">
   <title>聚会游戏发牌助手</title>
-  <link rel="stylesheet" href="./css/style.css?v=3">
+  <link rel="stylesheet" href="./css/style.css?v=5">
 </head>
 <body>
   <div id="feedback-flash" class="feedback-flash" aria-hidden="true"></div>
@@ -124,6 +124,13 @@
     <section id="page-charades" class="page" aria-label="你划我猜">
       <div id="charades-setup" class="panel">
         <p class="section-label">选择游戏时长</p>
+        <div class="landscape-notice">
+          <span>↻</span>
+          <div>
+            <strong>请横屏游玩</strong>
+            <small>你划我猜仅在横屏时启用上下翻体感</small>
+          </div>
+        </div>
         <div class="duration-options">
           <button type="button" data-duration="60">1 分钟</button>
           <button type="button" data-duration="120" class="selected">2 分钟</button>
@@ -159,6 +166,12 @@
 
   <div id="countdown" class="countdown hidden" role="status" aria-live="assertive">3</div>
 
+  <div id="orientation-gate" class="orientation-gate hidden" role="dialog" aria-modal="true">
+    <span>↻</span>
+    <h2>请将手机横过来</h2>
+    <p>横屏后才能开始你划我猜，上下翻动手机即可操作。</p>
+  </div>
+
   <div id="result-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
     <div class="modal-card">
       <span id="result-icon" class="result-icon">🎉</span>
@@ -169,6 +182,6 @@
     </div>
   </div>
 
-  <script type="module" src="./js/main.js?v=4"></script>
+  <script type="module" src="./js/main.js?v=5"></script>
 </body>
 </html>

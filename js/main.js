@@ -47,12 +47,14 @@ const gestureStatus = document.querySelector('#gesture-status');
 const gestureEnable = document.querySelector('#gesture-enable');
 const feedbackFlash = document.querySelector('#feedback-flash');
 const modal = document.querySelector('#result-modal');
+const orientationGate = document.querySelector('#orientation-gate');
 
 let gestureController;
 let charadesTimer;
 let selectedWerewolfPlayers = 6;
 let selectedCharadesDuration = 120;
 let currentResultAction = navigateHome;
+let charadesPausedForPortrait = false;
 
 document.addEventListener('DOMContentLoaded', initialize);
 
@@ -86,6 +88,8 @@ function bindEvents() {
     closeResult();
     currentResultAction();
   });
+  window.addEventListener('resize', handleOrientationLayoutChange);
+  window.addEventListener('orientationchange', handleOrientationLayoutChange);
 
   const playerRange = document.querySelector('#undercover-players');
   const countRange = document.querySelector('#undercover-count');
@@ -139,6 +143,8 @@ function navigate(gameType) {
 
 function navigateHome() {
   stopCharadesTimer();
+  hideOrientationGate();
+  charadesPausedForPortrait = false;
   store.app.activePage = 'home';
   pages.forEach((page) => page.classList.toggle('active', page.id === 'page-home'));
   pageTitle.textContent = '聚会游戏';
@@ -279,6 +285,10 @@ function renderUndercover() {
 }
 
 async function startCharades() {
+  if (!isLandscape()) {
+    showOrientationGate();
+    return;
+  }
   try {
     const data = await loadGameData('charades');
     const deck = createCharadesDeck(data.categories);
@@ -296,6 +306,12 @@ async function startCharades() {
     document.querySelector('#charades-play').classList.remove('hidden');
     renderCharades();
     await runCountdown();
+    if (!isLandscape()) {
+      updateStore('charades', { status: 'waiting-orientation' });
+      charadesPausedForPortrait = true;
+      showOrientationGate();
+      return;
+    }
     updateStore('charades', { status: 'playing' });
     startCharadesTimer();
   } catch (error) {
@@ -345,6 +361,43 @@ function stopCharadesTimer() {
     window.clearInterval(charadesTimer);
     charadesTimer = null;
   }
+}
+
+function handleOrientationLayoutChange() {
+  if (store.app.activePage !== 'charades') return;
+
+  if (!isLandscape()) {
+    showOrientationGate();
+    if (store.charades.status === 'playing') {
+      stopCharadesTimer();
+      charadesPausedForPortrait = true;
+    }
+    return;
+  }
+
+  hideOrientationGate();
+  if (store.charades.status === 'waiting-orientation') {
+    charadesPausedForPortrait = false;
+    updateStore('charades', { status: 'playing' });
+    startCharadesTimer();
+    return;
+  }
+  if (charadesPausedForPortrait && store.charades.status === 'playing') {
+    charadesPausedForPortrait = false;
+    startCharadesTimer();
+  }
+}
+
+function isLandscape() {
+  return window.innerWidth > window.innerHeight;
+}
+
+function showOrientationGate() {
+  orientationGate.classList.remove('hidden');
+}
+
+function hideOrientationGate() {
+  orientationGate.classList.add('hidden');
 }
 
 function finishCharades() {

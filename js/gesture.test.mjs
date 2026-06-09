@@ -10,9 +10,9 @@ const {
     initGestureRecognition,
 } = await import(moduleUrl);
 
-test('uses screen-relative up/down pitch in portrait', () => {
-    assert.equal(getScreenPitchAngle({ beta: 50, gamma: 10 }, 0), 50);
-    assert.equal(getScreenPitchAngle({ beta: 50, gamma: 10 }, 180), -50);
+test('disables motion gestures in portrait orientations', () => {
+    assert.equal(getScreenPitchAngle({ beta: 50, gamma: 10 }, 0), null);
+    assert.equal(getScreenPitchAngle({ beta: 50, gamma: 10 }, 180), null);
 });
 
 test('keeps up/down pitch semantics in both landscape directions', () => {
@@ -23,7 +23,7 @@ test('keeps up/down pitch semantics in both landscape directions', () => {
 
 test('returns null when the required sensor axis is unavailable', () => {
     assert.equal(getScreenPitchAngle({ beta: 50, gamma: null }, 90), null);
-    assert.equal(getScreenPitchAngle({ beta: null, gamma: 50 }, 0), null);
+    assert.equal(getScreenPitchAngle({ beta: 50, gamma: null }, 270), null);
 });
 
 test('fires upward and downward gestures at the configured threshold', () => {
