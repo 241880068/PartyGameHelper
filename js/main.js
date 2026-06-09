@@ -57,6 +57,9 @@ let currentResultAction = navigateHome;
 let charadesPausedForPortrait = false;
 let roleImageRenderId = 0;
 const roleImageCache = new Map();
+const CARD_FLIP_DURATION = 580;
+let werewolfCardTransitioning = false;
+let undercoverCardTransitioning = false;
 
 document.addEventListener('DOMContentLoaded', initialize);
 
@@ -190,25 +193,41 @@ async function startWerewolf() {
   }
 }
 
-function handleWerewolfAction() {
+async function handleWerewolfAction() {
   const game = store.werewolf;
-  if (game.status !== 'dealing') return;
+  if (game.status !== 'dealing' || werewolfCardTransitioning) return;
 
   if (!game.revealed) {
+    werewolfCardTransitioning = true;
+    setActionButtonBusy('werewolf-action', true);
     updateStore('werewolf', { revealed: true });
     renderWerewolf();
+    await wait(CARD_FLIP_DURATION);
+    werewolfCardTransitioning = false;
+    setActionButtonBusy('werewolf-action', false);
     return;
   }
 
+  werewolfCardTransitioning = true;
+  setActionButtonBusy('werewolf-action', true);
   const nextIndex = game.currentPlayerIndex + 1;
+  updateStore('werewolf', { revealed: false });
+  renderWerewolf();
+  await wait(CARD_FLIP_DURATION);
+
   if (nextIndex >= game.totalPlayers) {
-    updateStore('werewolf', { status: 'finished', revealed: false });
+    updateStore('werewolf', { status: 'finished' });
+    werewolfCardTransitioning = false;
+    setActionButtonBusy('werewolf-action', false);
     showResult('🐺', '身份发放完成', '请收起手机，开始夜晚流程。');
     return;
   }
-  updateStore('werewolf', { currentPlayerIndex: nextIndex, revealed: false });
+
+  updateStore('werewolf', { currentPlayerIndex: nextIndex });
   renderWerewolf();
   saveProgress('werewolf', store.werewolf);
+  werewolfCardTransitioning = false;
+  setActionButtonBusy('werewolf-action', false);
 }
 
 function renderWerewolf() {
@@ -302,25 +321,41 @@ async function startUndercover() {
   }
 }
 
-function handleUndercoverAction() {
+async function handleUndercoverAction() {
   const game = store.undercover;
-  if (game.status !== 'dealing') return;
+  if (game.status !== 'dealing' || undercoverCardTransitioning) return;
 
   if (!game.revealed) {
+    undercoverCardTransitioning = true;
+    setActionButtonBusy('undercover-action', true);
     updateStore('undercover', { revealed: true });
     renderUndercover();
+    await wait(CARD_FLIP_DURATION);
+    undercoverCardTransitioning = false;
+    setActionButtonBusy('undercover-action', false);
     return;
   }
 
+  undercoverCardTransitioning = true;
+  setActionButtonBusy('undercover-action', true);
   const nextIndex = game.currentPlayerIndex + 1;
+  updateStore('undercover', { revealed: false });
+  renderUndercover();
+  await wait(CARD_FLIP_DURATION);
+
   if (nextIndex >= game.totalPlayers) {
-    updateStore('undercover', { status: 'finished', revealed: false });
+    updateStore('undercover', { status: 'finished' });
+    undercoverCardTransitioning = false;
+    setActionButtonBusy('undercover-action', false);
     showResult('🕵️', '词语发放完成', '所有人依次描述自己的词语，找出卧底吧。');
     return;
   }
-  updateStore('undercover', { currentPlayerIndex: nextIndex, revealed: false });
+
+  updateStore('undercover', { currentPlayerIndex: nextIndex });
   renderUndercover();
   saveProgress('undercover', store.undercover);
+  undercoverCardTransitioning = false;
+  setActionButtonBusy('undercover-action', false);
 }
 
 function renderUndercover() {
@@ -545,6 +580,12 @@ function formatTime(seconds) {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+}
+
+function setActionButtonBusy(buttonId, busy) {
+  const button = document.querySelector(`#${buttonId}`);
+  button.disabled = busy;
+  button.setAttribute('aria-busy', String(busy));
 }
 
 function wait(milliseconds) {
