@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#151321">
   <title>聚会游戏发牌助手</title>
-  <link rel="stylesheet" href="./css/style.css?v=2">
+  <link rel="stylesheet" href="./css/style.css?v=3">
 </head>
 <body>
   <div id="feedback-flash" class="feedback-flash" aria-hidden="true"></div>
@@ -63,11 +63,11 @@
           <span id="werewolf-progress-label">1 / 6</span>
         </div>
         <div class="progress-track"><i id="werewolf-progress"></i></div>
-        <button id="werewolf-card" class="flip-card" type="button" aria-label="查看或隐藏身份">
+        <div id="werewolf-card" class="flip-card" aria-live="polite">
           <span class="flip-card-inner">
             <span class="card-face card-front">
-              <span class="card-symbol">↑</span>
-              <strong id="werewolf-front-title">向上翻转查看身份</strong>
+              <span class="card-symbol">🎴</span>
+              <strong id="werewolf-front-title">点击按钮查看身份</strong>
               <small>确保只有当前玩家能看到屏幕</small>
             </span>
             <span class="card-face card-back role-card">
@@ -76,8 +76,9 @@
               <strong id="werewolf-role-name">狼人</strong>
             </span>
           </span>
-        </button>
-        <p id="werewolf-hint" class="gesture-hint">上翻查看，记住后下翻隐藏并传给下一位</p>
+        </div>
+        <button id="werewolf-action" class="primary-button" type="button">查看身份</button>
+        <p id="werewolf-hint" class="gesture-hint">记住身份后，点击按钮并把手机传给下一位</p>
       </div>
     </section>
 
@@ -101,11 +102,11 @@
           <span id="undercover-progress-label">1 / 6</span>
         </div>
         <div class="progress-track cyan"><i id="undercover-progress"></i></div>
-        <button id="undercover-card" class="flip-card" type="button" aria-label="查看或隐藏词语">
+        <div id="undercover-card" class="flip-card" aria-live="polite">
           <span class="flip-card-inner">
             <span class="card-face card-front cyan-face">
-              <span class="card-symbol">↑</span>
-              <strong>向上翻转查看词语</strong>
+              <span class="card-symbol">🗝️</span>
+              <strong>点击按钮查看词语</strong>
               <small>不要让其他玩家看到</small>
             </span>
             <span class="card-face card-back word-card">
@@ -114,8 +115,9 @@
               <strong id="undercover-word">苹果</strong>
             </span>
           </span>
-        </button>
-        <p id="undercover-hint" class="gesture-hint">上翻查看，记住后下翻隐藏并传给下一位</p>
+        </div>
+        <button id="undercover-action" class="primary-button cyan" type="button">查看词语</button>
+        <p id="undercover-hint" class="gesture-hint">记住词语后，点击按钮并把手机传给下一位</p>
       </div>
     </section>
 
@@ -167,6 +169,6 @@
     </div>
   </div>
 
-  <script type="module" src="./js/main.js?v=2"></script>
+  <script type="module" src="./js/main.js?v=3"></script>
 </body>
 </html>

@@ -75,13 +75,9 @@ function bindEvents() {
   });
   backButton.addEventListener('click', navigateHome);
   document.querySelector('#werewolf-start').addEventListener('click', startWerewolf);
-  document.querySelector('#werewolf-card').addEventListener('click', () => handleGesture(
-    store.werewolf.revealed ? 'down' : 'up',
-  ));
+  document.querySelector('#werewolf-action').addEventListener('click', handleWerewolfAction);
   document.querySelector('#undercover-start').addEventListener('click', startUndercover);
-  document.querySelector('#undercover-card').addEventListener('click', () => handleGesture(
-    store.undercover.revealed ? 'down' : 'up',
-  ));
+  document.querySelector('#undercover-action').addEventListener('click', handleUndercoverAction);
   document.querySelector('#charades-start').addEventListener('click', startCharades);
   document.querySelector('#gesture-up').addEventListener('click', () => handleGesture('up'));
   document.querySelector('#gesture-down').addEventListener('click', () => handleGesture('down'));
@@ -137,7 +133,7 @@ function navigate(gameType) {
     charades: '你划我猜',
   }[gameType];
   backButton.classList.remove('hidden');
-  gestureControls.classList.toggle('hidden', gameType === 'home');
+  gestureControls.classList.toggle('hidden', gameType !== 'charades');
   resetGameView(gameType);
 }
 
@@ -179,16 +175,15 @@ async function startWerewolf() {
   }
 }
 
-function handleWerewolf(direction) {
+function handleWerewolfAction() {
   const game = store.werewolf;
   if (game.status !== 'dealing') return;
 
-  if (direction === 'up' && !game.revealed) {
+  if (!game.revealed) {
     updateStore('werewolf', { revealed: true });
     renderWerewolf();
     return;
   }
-  if (direction !== 'down' || !game.revealed) return;
 
   const nextIndex = game.currentPlayerIndex + 1;
   if (nextIndex >= game.totalPlayers) {
@@ -206,6 +201,9 @@ function renderWerewolf() {
   const role = game.assignedRoles[game.currentPlayerIndex];
   const card = document.querySelector('#werewolf-card');
   card.classList.toggle('revealed', game.revealed);
+  document.querySelector('#werewolf-action').textContent = game.revealed
+    ? '我记住了，传给下一位'
+    : '查看身份';
   document.querySelector('#werewolf-player-label').textContent = `第 ${game.currentPlayerIndex + 1} 位玩家`;
   document.querySelector('#werewolf-progress-label').textContent = `${game.currentPlayerIndex + 1} / ${game.totalPlayers}`;
   document.querySelector('#werewolf-progress').style.width = `${((game.currentPlayerIndex + 1) / game.totalPlayers) * 100}%`;
@@ -247,16 +245,15 @@ async function startUndercover() {
   }
 }
 
-function handleUndercover(direction) {
+function handleUndercoverAction() {
   const game = store.undercover;
   if (game.status !== 'dealing') return;
 
-  if (direction === 'up' && !game.revealed) {
+  if (!game.revealed) {
     updateStore('undercover', { revealed: true });
     renderUndercover();
     return;
   }
-  if (direction !== 'down' || !game.revealed) return;
 
   const nextIndex = game.currentPlayerIndex + 1;
   if (nextIndex >= game.totalPlayers) {
@@ -272,6 +269,9 @@ function handleUndercover(direction) {
 function renderUndercover() {
   const game = store.undercover;
   document.querySelector('#undercover-card').classList.toggle('revealed', game.revealed);
+  document.querySelector('#undercover-action').textContent = game.revealed
+    ? '我记住了，传给下一位'
+    : '查看词语';
   document.querySelector('#undercover-player-label').textContent = `第 ${game.currentPlayerIndex + 1} 位玩家`;
   document.querySelector('#undercover-progress-label').textContent = `${game.currentPlayerIndex + 1} / ${game.totalPlayers}`;
   document.querySelector('#undercover-progress').style.width = `${((game.currentPlayerIndex + 1) / game.totalPlayers) * 100}%`;
@@ -370,11 +370,9 @@ async function runCountdown() {
 
 function handleGesture(direction) {
   const page = store.app.activePage;
-  if (page === 'home') return;
+  if (page !== 'charades') return;
   provideFeedback(direction);
-  if (page === 'werewolf') handleWerewolf(direction);
-  if (page === 'undercover') handleUndercover(direction);
-  if (page === 'charades') handleCharades(direction);
+  handleCharades(direction);
 }
 
 function provideFeedback(direction) {
