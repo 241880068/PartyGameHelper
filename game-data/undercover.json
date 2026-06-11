@@ -1,52 +1,64 @@
 {
   "wordPairs": [
-    {
-      "civilian": "苹果",
-      "undercover": "梨"
-    },
-    {
-      "civilian": "牛奶",
-      "undercover": "豆浆"
-    },
-    {
-      "civilian": "可乐",
-      "undercover": "雪碧"
-    },
-    {
-      "civilian": "包子",
-      "undercover": "饺子"
-    },
-    {
-      "civilian": "火锅",
-      "undercover": "麻辣烫"
-    },
-    {
-      "civilian": "篮球",
-      "undercover": "足球"
-    },
-    {
-      "civilian": "手机",
-      "undercover": "平板电脑"
-    },
-    {
-      "civilian": "公交车",
-      "undercover": "地铁"
-    },
-    {
-      "civilian": "口红",
-      "undercover": "唇膏"
-    },
-    {
-      "civilian": "雨伞",
-      "undercover": "雨衣"
-    },
-    {
-      "civilian": "电影院",
-      "undercover": "剧院"
-    },
-    {
-      "civilian": "老师",
-      "undercover": "教练"
-    }
+    { "civilian": "苹果", "undercover": "梨" },
+    { "civilian": "牛奶", "undercover": "豆浆" },
+    { "civilian": "可乐", "undercover": "雪碧" },
+    { "civilian": "包子", "undercover": "饺子" },
+    { "civilian": "火锅", "undercover": "麻辣烫" },
+    { "civilian": "篮球", "undercover": "足球" },
+    { "civilian": "手机", "undercover": "平板电脑" },
+    { "civilian": "公交车", "undercover": "地铁" },
+    { "civilian": "口红", "undercover": "唇膏" },
+    { "civilian": "雨伞", "undercover": "雨衣" },
+    { "civilian": "电影院", "undercover": "剧院" },
+    { "civilian": "老师", "undercover": "教练" },
+    { "civilian": "咖啡", "undercover": "奶茶" },
+    { "civilian": "米饭", "undercover": "馒头" },
+    { "civilian": "面条", "undercover": "米粉" },
+    { "civilian": "汉堡", "undercover": "三明治" },
+    { "civilian": "蛋糕", "undercover": "面包" },
+    { "civilian": "冰淇淋", "undercover": "雪糕" },
+    { "civilian": "橙子", "undercover": "橘子" },
+    { "civilian": "西瓜", "undercover": "哈密瓜" },
+    { "civilian": "土豆", "undercover": "红薯" },
+    { "civilian": "黄瓜", "undercover": "丝瓜" },
+    { "civilian": "鸡肉", "undercover": "鸭肉" },
+    { "civilian": "啤酒", "undercover": "白酒" },
+    { "civilian": "筷子", "undercover": "勺子" },
+    { "civilian": "水杯", "undercover": "保温杯" },
+    { "civilian": "牙刷", "undercover": "梳子" },
+    { "civilian": "洗发水", "undercover": "沐浴露" },
+    { "civilian": "洗衣机", "undercover": "洗碗机" },
+    { "civilian": "空调", "undercover": "电风扇" },
+    { "civilian": "冰箱", "undercover": "冰柜" },
+    { "civilian": "电脑", "undercover": "电视" },
+    { "civilian": "耳机", "undercover": "音响" },
+    { "civilian": "相机", "undercover": "摄像机" },
+    { "civilian": "手表", "undercover": "闹钟" },
+    { "civilian": "书包", "undercover": "行李箱" },
+    { "civilian": "铅笔", "undercover": "钢笔" },
+    { "civilian": "橡皮", "undercover": "修正带" },
+    { "civilian": "报纸", "undercover": "杂志" },
+    { "civilian": "小说", "undercover": "漫画" },
+    { "civilian": "自行车", "undercover": "电动车" },
+    { "civilian": "出租车", "undercover": "网约车" },
+    { "civilian": "火车", "undercover": "高铁" },
+    { "civilian": "飞机", "undercover": "直升机" },
+    { "civilian": "轮船", "undercover": "游艇" },
+    { "civilian": "酒店", "undercover": "民宿" },
+    { "civilian": "医院", "undercover": "诊所" },
+    { "civilian": "超市", "undercover": "便利店" },
+    { "civilian": "公园", "undercover": "动物园" },
+    { "civilian": "图书馆", "undercover": "书店" },
+    { "civilian": "警察", "undercover": "保安" },
+    { "civilian": "医生", "undercover": "护士" },
+    { "civilian": "记者", "undercover": "主持人" },
+    { "civilian": "演员", "undercover": "歌手" },
+    { "civilian": "律师", "undercover": "法官" },
+    { "civilian": "老虎", "undercover": "狮子" },
+    { "civilian": "熊猫", "undercover": "考拉" },
+    { "civilian": "海豚", "undercover": "海豹" },
+    { "civilian": "企鹅", "undercover": "鸵鸟" },
+    { "civilian": "蜜蜂", "undercover": "蝴蝶" }
   ]
 }

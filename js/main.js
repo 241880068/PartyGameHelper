@@ -1,8 +1,10 @@
 import {
-  createCharadesDeck,
+  createCharadesSummary,
+  createCharadesThemeDeck,
   createUndercoverRound,
   createWerewolfDeck,
   getCharadesRecord,
+  getUndercoverCount,
   loadGameData,
   recordCharadesResult,
   saveProgress,
@@ -25,6 +27,7 @@ const ROLE_IMAGES = {
   猎人: 'hunter.jpg',
   守卫: 'guard.jpg',
   白痴: 'idiot.jpg',
+  丘比特: '丘比特.jpg',
   平民: 'villager.jpg',
 };
 
@@ -35,15 +38,16 @@ const ROLE_EMOJI = {
   猎人: '🏹',
   守卫: '🛡️',
   白痴: '🃏',
+  丘比特: '💘',
   平民: '👤',
 };
 
 const CATEGORY_LABELS = {
+  film_tv: '影视',
+  sports: '运动',
+  food: '美食',
+  celebrities: '明星',
   animals: '动物',
-  objects: '物品',
-  actions: '动作',
-  occupations: '职业',
-  entertainment: '娱乐',
 };
 
 const pages = [...document.querySelectorAll('.page')];
@@ -64,6 +68,7 @@ let gestureController;
 let charadesTimer;
 let selectedWerewolfPlayers = 6;
 let selectedCharadesDuration = 120;
+let selectedCharadesTheme = 'film_tv';
 let currentResultAction = navigateHome;
 let charadesPausedForPortrait = false;
 let charadesMediaStream = null;
@@ -115,9 +120,10 @@ function bindEvents() {
   const playerRange = document.querySelector('#undercover-players');
   const countRange = document.querySelector('#undercover-count');
   playerRange.addEventListener('input', () => {
+    const recommendedCount = getUndercoverCount(Number(playerRange.value));
     document.querySelector('#undercover-player-output').textContent = `${playerRange.value} 人`;
-    countRange.max = Math.max(1, Math.min(3, Number(playerRange.value) - 2));
-    if (Number(countRange.value) > Number(countRange.max)) countRange.value = countRange.max;
+    countRange.max = String(recommendedCount);
+    countRange.value = String(recommendedCount);
     document.querySelector('#undercover-count-output').textContent = `${countRange.value} 人`;
   });
   countRange.addEventListener('input', () => {
@@ -130,6 +136,9 @@ function bindEvents() {
       button.classList.add('selected');
       selectedCharadesDuration = Number(button.dataset.duration);
     });
+  });
+  document.querySelector('#charades-theme').addEventListener('change', (event) => {
+    selectedCharadesTheme = event.target.value;
   });
   const musicBtn = document.querySelector('#music-toggle');
   if (musicBtn) {
@@ -438,9 +447,10 @@ async function startCharades() {
   try {
     await startCharadesRecording();
     const data = await loadGameData('charades');
-    const deck = createCharadesDeck(data.categories);
+    const deck = createCharadesThemeDeck(data.categories, selectedCharadesTheme);
     updateStore('charades', {
       status: 'countdown',
+      selectedTheme: selectedCharadesTheme,
       duration: selectedCharadesDuration,
       remainingSeconds: selectedCharadesDuration,
       deck,
@@ -588,11 +598,21 @@ function finishCharades() {
   stopCharadesRecording();
   updateStore('charades', { status: 'ended' });
   const game = store.charades;
-  const record = recordCharadesResult({ score: game.score });
-  const details = game.correctWords.length
-    ? `猜对：${game.correctWords.join('、')}`
-    : '本轮还没有猜对词语，再来一次一定会更好。';
-  showResult('🎉', `本轮得分 ${game.score}`, `历史最佳 ${record.bestScore} 分`, details);
+  const summary = createCharadesSummary(game);
+  const record = recordCharadesResult(summary);
+  const correctDetails = summary.correctWords.length
+    ? summary.correctWords.join('、')
+    : '无';
+  const incorrectDetails = summary.incorrectWords.length
+    ? summary.incorrectWords.join('、')
+    : '无';
+  const details = `猜对 ${summary.correctCount} 个：${correctDetails}\n猜错 ${summary.incorrectCount} 个：${incorrectDetails}`;
+  showResult(
+    '🎉',
+    `本轮得分 ${summary.score}`,
+    `历史最佳 ${record.bestScore} 分`,
+    details,
+  );
 }
 
 async function runCountdown() {

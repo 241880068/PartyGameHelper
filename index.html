@@ -97,12 +97,12 @@
       <div id="undercover-setup" class="panel">
         <label class="field-label" for="undercover-players">玩家人数</label>
         <div class="range-row">
-          <input id="undercover-players" type="range" min="4" max="12" value="6">
+          <input id="undercover-players" type="range" min="6" max="15" value="6">
           <output id="undercover-player-output" for="undercover-players">6 人</output>
         </div>
         <label class="field-label" for="undercover-count">卧底人数</label>
         <div class="range-row">
-          <input id="undercover-count" type="range" min="1" max="2" value="1">
+          <input id="undercover-count" type="range" min="1" max="4" value="1">
           <output id="undercover-count-output" for="undercover-count">1 人</output>
         </div>
         <button id="undercover-start" class="primary-button cyan" type="button">随机分配词语</button>
@@ -134,6 +134,14 @@
 
     <section id="page-charades" class="page" aria-label="你划我猜">
       <div id="charades-setup" class="panel">
+        <label class="field-label" for="charades-theme">选择词库主题</label>
+        <select id="charades-theme" class="theme-select">
+          <option value="film_tv">影视</option>
+          <option value="sports">运动</option>
+          <option value="food">美食</option>
+          <option value="celebrities">明星</option>
+          <option value="animals">动物</option>
+        </select>
         <p class="section-label">选择游戏时长</p>
         <div class="landscape-notice">
           <span>↻</span>

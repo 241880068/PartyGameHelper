@@ -22,6 +22,7 @@ const initialState = {
   },
   charades: {
     status: 'idle',
+    selectedTheme: 'film_tv',
     duration: 120,
     remainingSeconds: 120,
     deck: [],
