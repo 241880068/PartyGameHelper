@@ -8,8 +8,9 @@ import {
   saveProgress,
 } from './gameLogic.js';
 import { initGestureRecognition } from './gesture.js';
-import { resetStoreSection, store, updateStore } from './store.js';
+import { resetStoreSection, store, updateStore , isGamePaused} from './store.js';
 import { shuffle } from './utils/shuffle.js';
+import { unlockAudioOnFirstTouch, toggleMute, playBGM, stopBGM } from './utils/audioManager.js';
 
 const ROLE_IMAGES = {
   狼人: 'werewolf.jpg',
@@ -49,6 +50,9 @@ const feedbackFlash = document.querySelector('#feedback-flash');
 const modal = document.querySelector('#result-modal');
 const orientationGate = document.querySelector('#orientation-gate');
 
+const pauseButton = document.querySelector('#pause-button');
+const exitButton = document.querySelector('#exit-button');
+
 let gestureController;
 let charadesTimer;
 let selectedWerewolfPlayers = 6;
@@ -64,9 +68,10 @@ let undercoverCardTransitioning = false;
 document.addEventListener('DOMContentLoaded', initialize);
 
 async function initialize() {
-  renderWerewolfPlayerOptions();
   bindEvents();
   updateBestScore();
+  document.body.addEventListener('click', unlockAudioOnFirstTouch, { once: true });
+  document.body.addEventListener('touchstart', unlockAudioOnFirstTouch, { once: true });
   gestureController = initGestureRecognition({
     fallbackRoot: null,
     onSwipeUp: () => handleGesture('up'),
@@ -115,21 +120,49 @@ function bindEvents() {
       selectedCharadesDuration = Number(button.dataset.duration);
     });
   });
+  const musicBtn = document.querySelector('#music-toggle');
+  if (musicBtn) {
+    musicBtn.addEventListener('click', () => {
+      const isMuted = toggleMute();
+      musicBtn.textContent = isMuted ? '🔇' : '🔊';
+    });
+  }
+  initPlayerSlider('werewolf-players-slider', 'werewolf-players-output', '#werewolf-setup .slider-marks');
+  if (pauseButton) {
+    pauseButton.addEventListener('click', togglePause);
+  }
+  if (exitButton) {
+    exitButton.addEventListener('click', exitCurrentGame);
+  }
 }
 
-function renderWerewolfPlayerOptions() {
-  const root = document.querySelector('#werewolf-player-options');
-  for (let count = 6; count <= 12; count += 1) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = `${count} 人`;
-    button.classList.toggle('selected', count === selectedWerewolfPlayers);
-    button.addEventListener('click', () => {
-      selectedWerewolfPlayers = count;
-      root.querySelectorAll('button').forEach((item) => item.classList.toggle('selected', item === button));
+function initPlayerSlider(sliderId, outputId, marksContainerSelector) {
+  const slider = document.querySelector(`#${sliderId}`);
+  const output = document.querySelector(`#${outputId}`);
+  const marks = document.querySelectorAll(`${marksContainerSelector} .mark`);
+
+  if (!slider) return;
+
+  slider.addEventListener('input', (e) => {
+    const currentValue = parseInt(e.target.value, 10);
+    
+    // 1. 更新显示的文本
+    if (output) {
+      output.textContent = currentValue;
+    }
+
+    // 2. 更新狼人杀的全局变量
+    if (sliderId === 'werewolf-players-slider') {
+      selectedWerewolfPlayers = currentValue;
+    }
+
+    // 3. 处理刻度放大效果 (添加/移除 active 类)
+    marks.forEach(mark => {
+      const markValue = parseInt(mark.dataset.value, 10);
+      // 如果当前滑块的值等于刻度值，就加上 active 类，触发 CSS 放大
+      mark.classList.toggle('active', markValue === currentValue);
     });
-    root.append(button);
-  }
+  });
 }
 
 function navigate(gameType) {
@@ -142,6 +175,8 @@ function navigate(gameType) {
     charades: '你划我猜',
   }[gameType];
   backButton.classList.remove('hidden');
+  pauseButton.classList.remove('hidden');
+  exitButton.classList.remove('hidden');
   gestureControls.classList.toggle('hidden', gameType !== 'charades');
   resetGameView(gameType);
 }
@@ -154,8 +189,14 @@ function navigateHome() {
   pages.forEach((page) => page.classList.toggle('active', page.id === 'page-home'));
   pageTitle.textContent = '聚会游戏';
   backButton.classList.add('hidden');
+  pauseButton.classList.add('hidden');
+  exitButton.classList.add('hidden');
+  updateStore('app', { isPaused: false });
+  document.body.classList.remove('game-paused');
+  pauseButton.textContent = '⏸️';
   gestureControls.classList.add('hidden');
   updateBestScore();
+  stopBGM();
 }
 
 function resetGameView(gameType) {
@@ -183,6 +224,7 @@ async function startWerewolf() {
     });
     document.querySelector('#werewolf-setup').classList.add('hidden');
     document.querySelector('#werewolf-play').classList.remove('hidden');
+    playBGM();
     renderWerewolf();
     saveProgress('werewolf', store.werewolf);
   } catch (error) {
@@ -219,6 +261,7 @@ async function handleWerewolfAction() {
     updateStore('werewolf', { status: 'finished' });
     werewolfCardTransitioning = false;
     setActionButtonBusy('werewolf-action', false);
+    stopBGM();
     showResult('🐺', '身份发放完成', '请收起手机，开始夜晚流程。');
     return;
   }
@@ -314,6 +357,7 @@ async function startUndercover() {
     });
     document.querySelector('#undercover-setup').classList.add('hidden');
     document.querySelector('#undercover-play').classList.remove('hidden');
+    playBGM();
     renderUndercover();
     saveProgress('undercover', store.undercover);
   } catch (error) {
@@ -347,6 +391,7 @@ async function handleUndercoverAction() {
     updateStore('undercover', { status: 'finished' });
     undercoverCardTransitioning = false;
     setActionButtonBusy('undercover-action', false);
+    stopBGM();
     showResult('🕵️', '词语发放完成', '所有人依次描述自己的词语，找出卧底吧。');
     return;
   }
@@ -474,6 +519,34 @@ function handleOrientationLayoutChange() {
   }
 }
 
+function togglePause() {
+  const currentState = store.app.isPaused;
+  const newState = !currentState;
+  updateStore('app', { isPaused: newState });
+
+  pauseButton.textContent = newState ? '▶️' : '⏸️';
+
+  // 针对“你划我猜”的特殊处理：暂停/恢复定时器
+  if (store.app.activePage === 'charades') {
+    if (newState) {
+      stopCharadesTimer(); // 暂停：清除定时器
+    } else {
+      startCharadesTimer(); // 恢复：重启定时器
+    }
+  }
+
+  // 可选：给 body 加个 class 方便成员 D 做暗化 UI
+  document.body.classList.toggle('game-paused', newState);
+}
+
+function exitCurrentGame() {
+  // 退出游戏就是进行一次彻底的重置并返回主页
+  updateStore('app', { isPaused: false });
+  document.body.classList.remove('game-paused');
+  pauseButton.textContent = '⏸️'; // 重置按钮图标
+  navigateHome(); // navigateHome 里已经包含了 stopCharadesTimer() 和 stopBGM()
+}
+
 function isLandscape() {
   return window.innerWidth > window.innerHeight;
 }
@@ -508,6 +581,7 @@ async function runCountdown() {
 }
 
 function handleGesture(direction) {
+  if (store.app.isPaused) return;
   const page = store.app.activePage;
   if (page !== 'charades') return;
   provideFeedback(direction);

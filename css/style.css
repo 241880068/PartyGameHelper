@@ -140,6 +140,73 @@ main { width: min(100%, 620px); margin: 0 auto; padding: 4px 18px calc(112px + e
 .progress-track i { display: block; width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--pink), var(--purple)); transition: width .3s ease; }
 .progress-track.cyan i { background: linear-gradient(90deg, var(--cyan), #398cff); }
 
+/* ====================
+   新增：人数滑块组件样式
+   ==================== */
+.slider-wrapper {
+  position: relative;
+  width: 100%;
+  margin: 30px 0 20px;
+  padding: 10px 0;
+}
+
+/* 隐藏原生滑块的轨道，只保留可拖动的圆点并置于顶层 */
+.slider-wrapper input[type="range"] {
+  width: 100%;
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  accent-color: var(--pink); /* 滑块主色调 */
+}
+
+/* 刻度标记容器，绝对定位在滑块下方 */
+.slider-marks {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 1;
+  pointer-events: none; /* 穿透点击，防止阻挡拖拽 */
+}
+
+/* 单个刻度标记的基础样式 */
+.slider-marks .mark {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
+  background-color: var(--panel-2);
+  color: var(--muted);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: bold;
+  transition: all 0.25s cubic-bezier(0.2, 0.75, 0.25, 1); /* 平滑缩放 */
+}
+
+/* 匹配时的放大高亮状态 (transform: scale 配合 UI) */
+.slider-marks .mark.active {
+  transform: translate(-50%, -50%) scale(1.6); /* 放大 1.6 倍 */
+  background-color: var(--pink);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(255, 93, 143, 0.4);
+}
+
+.slider-output {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+.slider-output span {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+}
+
 .flip-card {
   display: block;
   width: min(100%, 350px);

@@ -2,6 +2,8 @@ const initialState = {
   app: {
     activePage: 'home',
     gestureStatus: 'initializing',
+    isMuted: false,
+    isPaused: false,
   },
   werewolf: {
     status: 'idle',
@@ -69,4 +71,8 @@ export function subscribe(listener) {
 
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+export function isGamePaused() {
+  return store.app.isPaused;
 }

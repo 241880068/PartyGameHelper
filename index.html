@@ -16,6 +16,9 @@
       <p class="eyebrow">PARTY GAME HELPER</p>
       <h1 id="page-title">聚会游戏</h1>
     </div>
+    <button id="pause-button" class="icon-button hidden" type="button" aria-label="暂停/恢复">⏸️</button>
+    <button id="exit-button" class="icon-button hidden" type="button" aria-label="退出游戏">🚪</button>
+    <button id="music-toggle" class="icon-button" type="button" aria-label="切换静音">🔊</button>
     <div class="status-dot" title="纯前端，无需登录"></div>
   </header>
 
@@ -53,8 +56,16 @@
 
     <section id="page-werewolf" class="page" aria-label="狼人杀">
       <div id="werewolf-setup" class="panel">
-        <p class="section-label">选择玩家人数</p>
-        <div id="werewolf-player-options" class="number-grid"></div>
+        <div class="slider-wrapper">
+          <input id="werewolf-players-slider" type="range" min="6" max="15" step="1" value="6">
+          <div class="slider-marks" aria-hidden="true">
+            <span class="mark active" data-value="6" style="left: 0%;">6</span>
+            <span class="mark" data-value="9" style="left: 33.33%;">9</span>
+            <span class="mark" data-value="12" style="left: 66.67%;">12</span>
+            <span class="mark" data-value="15" style="left: 100%;">15</span>
+          </div>
+        </div>
+        <div class="slider-output">当前选择: <span id="werewolf-players-output">6</span> 人</div>
         <button id="werewolf-start" class="primary-button" type="button">随机发放身份</button>
       </div>
       <div id="werewolf-play" class="play-area hidden">
@@ -181,6 +192,17 @@
       <button id="result-confirm" class="primary-button" type="button">返回主页</button>
     </div>
   </div>
+
+
+  <audio id="bgm-audio" loop preload="auto">
+    <source src="./assets/audio/bgm-suspense.mp3" type="audio/mpeg">
+  </audio>
+  <audio id="effect-correct" preload="auto">
+    <source src="./assets/audio/correct.mp3" type="audio/mpeg">
+  </audio>
+  <audio id="effect-skip" preload="auto">
+    <source src="./assets/audio/skip.mp3" type="audio/mpeg">
+  </audio>
 
   <script type="module" src="./js/main.js?v=7"></script>
 </body>
