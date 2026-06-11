@@ -144,6 +144,61 @@ test('renders working fallback buttons without an orientation sensor', () => {
     }
 });
 
+test('disables and restores sensor gesture callbacks', () => {
+    const originalWindow = globalThis.window;
+    const originalDocument = globalThis.document;
+    const originalNavigator = globalThis.navigator;
+    const listeners = {};
+    const events = [];
+
+    globalThis.window = {
+        DeviceOrientationEvent: function DeviceOrientationEvent() {},
+        screen: { orientation: { angle: 90 } },
+        dispatchEvent: () => {},
+        addEventListener: (type, callback) => {
+            listeners[type] = callback;
+        },
+        removeEventListener: () => {},
+        setTimeout,
+        clearTimeout,
+    };
+    globalThis.document = {
+        visibilityState: 'visible',
+        body: new FakeElement('body'),
+        createElement: (tagName) => new FakeElement(tagName),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+    };
+    Object.defineProperty(globalThis, 'navigator', {
+        configurable: true,
+        value: {},
+    });
+
+    try {
+        const controller = initGestureRecognition({
+            fallbackRoot: null,
+            onSwipeUp: () => events.push('up'),
+        });
+
+        controller.setEnabled(false);
+        listeners.deviceorientation({ beta: 0, gamma: 50 });
+        assert.deepEqual(events, []);
+        assert.equal(controller.isEnabled(), false);
+
+        controller.setEnabled(true);
+        listeners.deviceorientation({ beta: 0, gamma: 0 });
+        listeners.deviceorientation({ beta: 0, gamma: 50 });
+        assert.deepEqual(events, ['up']);
+        assert.equal(controller.isEnabled(), true);
+
+        controller.destroy();
+    } finally {
+        restoreGlobal('window', originalWindow);
+        restoreGlobal('document', originalDocument);
+        restoreGlobal('navigator', originalNavigator);
+    }
+});
+
 class FakeElement {
     constructor(tagName) {
         this.tagName = tagName;

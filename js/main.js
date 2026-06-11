@@ -10,7 +10,13 @@ import {
 import { initGestureRecognition } from './gesture.js';
 import { resetStoreSection, store, updateStore , isGamePaused} from './store.js';
 import { shuffle } from './utils/shuffle.js';
-import { unlockAudioOnFirstTouch, toggleMute, playBGM, stopBGM } from './utils/audioManager.js';
+import {
+  unlockAudioOnFirstTouch,
+  toggleMute,
+  playBGM,
+  playEffect,
+  stopBGM,
+} from './utils/audioManager.js';
 
 const ROLE_IMAGES = {
   狼人: 'werewolf.jpg',
@@ -49,6 +55,7 @@ const gestureEnable = document.querySelector('#gesture-enable');
 const feedbackFlash = document.querySelector('#feedback-flash');
 const modal = document.querySelector('#result-modal');
 const orientationGate = document.querySelector('#orientation-gate');
+const charadesMediaStatus = document.querySelector('#charades-media-status');
 
 const pauseButton = document.querySelector('#pause-button');
 const exitButton = document.querySelector('#exit-button');
@@ -59,6 +66,10 @@ let selectedWerewolfPlayers = 6;
 let selectedCharadesDuration = 120;
 let currentResultAction = navigateHome;
 let charadesPausedForPortrait = false;
+let charadesMediaStream = null;
+let charadesMediaRecorder = null;
+let charadesRecordingChunks = [];
+let discardCharadesRecording = false;
 let roleImageRenderId = 0;
 const roleImageCache = new Map();
 const CARD_FLIP_DURATION = 580;
@@ -183,6 +194,9 @@ function navigate(gameType) {
 
 function navigateHome() {
   stopCharadesTimer();
+  if (store.app.activePage === 'charades') {
+    stopCharadesRecording();
+  }
   hideOrientationGate();
   charadesPausedForPortrait = false;
   store.app.activePage = 'home';
@@ -192,6 +206,7 @@ function navigateHome() {
   pauseButton.classList.add('hidden');
   exitButton.classList.add('hidden');
   updateStore('app', { isPaused: false });
+  gestureController?.setEnabled(true);
   document.body.classList.remove('game-paused');
   pauseButton.textContent = '⏸️';
   gestureControls.classList.add('hidden');
@@ -421,6 +436,7 @@ async function startCharades() {
     return;
   }
   try {
+    await startCharadesRecording();
     const data = await loadGameData('charades');
     const deck = createCharadesDeck(data.categories);
     updateStore('charades', {
@@ -444,8 +460,11 @@ async function startCharades() {
       return;
     }
     updateStore('charades', { status: 'playing' });
-    startCharadesTimer();
+    if (!store.app.isPaused) {
+      startCharadesTimer();
+    }
   } catch (error) {
+    stopCharadesRecording({ discard: true });
     showError(error);
   }
 }
@@ -510,10 +529,12 @@ function handleOrientationLayoutChange() {
   if (store.charades.status === 'waiting-orientation') {
     charadesPausedForPortrait = false;
     updateStore('charades', { status: 'playing' });
-    startCharadesTimer();
+    if (!store.app.isPaused) {
+      startCharadesTimer();
+    }
     return;
   }
-  if (charadesPausedForPortrait && store.charades.status === 'playing') {
+  if (charadesPausedForPortrait && store.charades.status === 'playing' && !store.app.isPaused) {
     charadesPausedForPortrait = false;
     startCharadesTimer();
   }
@@ -528,10 +549,13 @@ function togglePause() {
 
   // 针对“你划我猜”的特殊处理：暂停/恢复定时器
   if (store.app.activePage === 'charades') {
+    gestureController?.setEnabled(!newState);
     if (newState) {
       stopCharadesTimer(); // 暂停：清除定时器
-    } else {
+      pauseCharadesRecording();
+    } else if (store.charades.status === 'playing' && isLandscape()) {
       startCharadesTimer(); // 恢复：重启定时器
+      resumeCharadesRecording();
     }
   }
 
@@ -561,6 +585,7 @@ function hideOrientationGate() {
 
 function finishCharades() {
   stopCharadesTimer();
+  stopCharadesRecording();
   updateStore('charades', { status: 'ended' });
   const game = store.charades;
   const record = recordCharadesResult({ score: game.score });
@@ -584,8 +609,120 @@ function handleGesture(direction) {
   if (store.app.isPaused) return;
   const page = store.app.activePage;
   if (page !== 'charades') return;
+  if (store.charades.status !== 'playing') return;
   provideFeedback(direction);
+  playEffect(direction === 'up' ? 'correct' : 'skip');
   handleCharades(direction);
+}
+
+async function startCharadesRecording() {
+  if (!charadesMediaStatus) return;
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    charadesMediaStatus.textContent = '当前浏览器不支持录音录像，仍可继续游戏';
+    return;
+  }
+
+  charadesMediaStatus.textContent = '正在申请麦克风和摄像头权限…';
+  try {
+    charadesMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    charadesRecordingChunks = [];
+    discardCharadesRecording = false;
+
+    const mimeType = getSupportedRecordingMimeType();
+    charadesMediaRecorder = mimeType
+      ? new MediaRecorder(charadesMediaStream, { mimeType })
+      : new MediaRecorder(charadesMediaStream);
+    charadesMediaRecorder.addEventListener('dataavailable', (event) => {
+      if (event.data.size > 0) {
+        charadesRecordingChunks.push(event.data);
+      }
+    });
+    charadesMediaRecorder.addEventListener('stop', saveCharadesRecording);
+    charadesMediaRecorder.start(1000);
+    charadesMediaStatus.textContent = '正在录音录像，游戏结束后将自动保存';
+  } catch (error) {
+    console.warn('[charades] Media permission was not granted:', error);
+    releaseCharadesMediaStream();
+    charadesMediaStatus.textContent = '未获得录音录像权限，仍可继续游戏';
+  }
+}
+
+function pauseCharadesRecording() {
+  if (charadesMediaRecorder?.state === 'recording') {
+    charadesMediaRecorder.pause();
+    charadesMediaStatus.textContent = '游戏已暂停，录音录像同步暂停';
+  }
+}
+
+function resumeCharadesRecording() {
+  if (charadesMediaRecorder?.state === 'paused') {
+    charadesMediaRecorder.resume();
+    charadesMediaStatus.textContent = '正在录音录像，游戏结束后将自动保存';
+  }
+}
+
+function stopCharadesRecording({ discard = false } = {}) {
+  if (!charadesMediaRecorder) {
+    releaseCharadesMediaStream();
+    return;
+  }
+
+  discardCharadesRecording = discardCharadesRecording || discard;
+  if (charadesMediaRecorder.state !== 'inactive') {
+    charadesMediaRecorder.stop();
+  }
+}
+
+function saveCharadesRecording() {
+  const recorder = charadesMediaRecorder;
+  const chunks = charadesRecordingChunks;
+  const shouldDiscard = discardCharadesRecording;
+  charadesMediaRecorder = null;
+  charadesRecordingChunks = [];
+  discardCharadesRecording = false;
+  releaseCharadesMediaStream();
+
+  if (shouldDiscard || chunks.length === 0) return;
+
+  const mimeType = recorder.mimeType || chunks[0].type || 'video/webm';
+  const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+  const blob = new Blob(chunks, { type: mimeType });
+  const downloadUrl = URL.createObjectURL(blob);
+  const downloadLink = document.createElement('a');
+  downloadLink.href = downloadUrl;
+  downloadLink.download = `你划我猜-${formatRecordingTime(new Date())}.${extension}`;
+  document.body.append(downloadLink);
+  downloadLink.click();
+  downloadLink.remove();
+  window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+  charadesMediaStatus.textContent = '录像已生成，请在手机“下载”中查看';
+}
+
+function releaseCharadesMediaStream() {
+  charadesMediaStream?.getTracks().forEach((track) => track.stop());
+  charadesMediaStream = null;
+}
+
+function getSupportedRecordingMimeType() {
+  if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
+  return [
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ].find((type) => MediaRecorder.isTypeSupported(type)) ?? '';
+}
+
+function formatRecordingTime(date) {
+  const parts = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+    String(date.getHours()).padStart(2, '0'),
+    String(date.getMinutes()).padStart(2, '0'),
+    String(date.getSeconds()).padStart(2, '0'),
+  ];
+  return `${parts.slice(0, 3).join('')}-${parts.slice(3).join('')}`;
 }
 
 function provideFeedback(direction) {

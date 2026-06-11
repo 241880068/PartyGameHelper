@@ -147,6 +147,9 @@
           <button type="button" data-duration="120" class="selected">2 分钟</button>
           <button type="button" data-duration="180">3 分钟</button>
         </div>
+        <p id="charades-media-status" class="gesture-hint" role="status">
+          开始游戏时将申请麦克风和摄像头权限，结束后自动保存录像
+        </p>
         <button id="charades-start" class="primary-button orange" type="button">开始倒计时</button>
       </div>
       <div id="charades-play" class="charades-play hidden">
@@ -198,12 +201,12 @@
     <source src="./assets/audio/bgm-suspense.mp3" type="audio/mpeg">
   </audio>
   <audio id="effect-correct" preload="auto">
-    <source src="./assets/audio/correct.mp3" type="audio/mpeg">
+    <source src="./assets/audio/correct.wav" type="audio/wav">
   </audio>
   <audio id="effect-skip" preload="auto">
-    <source src="./assets/audio/skip.mp3" type="audio/mpeg">
+    <source src="./assets/audio/skip.wav" type="audio/wav">
   </audio>
 
-  <script type="module" src="./js/main.js?v=7"></script>
+  <script type="module" src="./js/main.js?v=8"></script>
 </body>
 </html>

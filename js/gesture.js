@@ -104,6 +104,7 @@ export function initGestureRecognition({
 
     let status = 'initializing';
     let listening = false;
+    let enabled = true;
     let receivedSensorEvent = false;
     let sensorTimer = null;
     let fallbackElement = null;
@@ -125,6 +126,9 @@ export function initGestureRecognition({
     }
 
     function trigger(direction, callback) {
+        if (!enabled) {
+            return;
+        }
         vibrate(direction);
         callback();
         window.dispatchEvent(new CustomEvent('gesture:trigger', {
@@ -146,6 +150,10 @@ export function initGestureRecognition({
 
         status = 'active';
         removeFallback();
+        if (!enabled) {
+            detector.reset();
+            return;
+        }
         detector.update(screenPitchAngle);
     }
 
@@ -263,7 +271,13 @@ export function initGestureRecognition({
         stopListening();
         removeFallback();
         detector.reset();
+        enabled = false;
         status = 'destroyed';
+    }
+
+    function setEnabled(nextEnabled) {
+        enabled = Boolean(nextEnabled);
+        detector.reset();
     }
 
     const OrientationEvent = window.DeviceOrientationEvent;
@@ -278,8 +292,10 @@ export function initGestureRecognition({
     return {
         destroy,
         requestPermission,
+        setEnabled,
         getStatus: () => status,
         isActive: () => status === 'active',
+        isEnabled: () => enabled,
     };
 }
 
@@ -306,7 +322,9 @@ function createUnavailableController(status) {
     return {
         destroy: noop,
         requestPermission: async () => false,
+        setEnabled: noop,
         getStatus: () => status,
         isActive: () => false,
+        isEnabled: () => false,
     };
 }
