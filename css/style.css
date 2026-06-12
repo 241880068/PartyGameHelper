@@ -41,6 +41,9 @@ button { color: inherit; }
 
 .hidden { display: none !important; }
 
+/* ============================================================
+   顶部导航栏 — 首页显示完整标题，游戏页只显示返回+音量
+   ============================================================ */
 .app-header {
   position: sticky;
   top: 0;
@@ -54,6 +57,20 @@ button { color: inherit; }
   background: rgba(255, 255, 255, .92);
   backdrop-filter: blur(18px);
   border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+/* 首页显示完整标题区域 */
+.header-title-area { text-align: center; }
+
+/* 游戏页面隐藏标题区域（只保留返回和音量按钮） */
+body.in-game .header-title-area {
+  display: none;
+}
+
+/* 游戏页面时 header 只显示两端的按钮 */
+body.in-game .app-header {
+  grid-template-columns: 44px 0fr 44px;
+  justify-content: space-between;
 }
 
 .app-header h1 { margin: 1px 0 0; font-size: 22px; }
@@ -292,62 +309,150 @@ main { width: min(100%, 620px); margin: 0 auto; padding: 4px 18px calc(112px + e
 .landscape-notice > span { font-size: 30px; color: var(--orange); }
 .landscape-notice strong, .landscape-notice small { display: block; }
 .landscape-notice small { margin-top: 3px; color: var(--muted); line-height: 1.4; }
-.charades-play { padding-top: 18px; }
-.charades-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.charades-stats div { padding: 18px; border-radius: 18px; background: var(--panel); }
-.charades-stats small, .charades-stats strong { display: block; }
-.charades-stats small { margin-bottom: 7px; color: var(--muted); }
-.charades-stats strong { font-size: 27px; }
-.charades-word-card {
+
+/* ============================================================
+   你划我猜 — 竖屏游戏主界面布局
+   ============================================================ */
+.charades-play {
   display: flex;
-  min-height: 330px;
-  margin: 16px 0;
-  padding: 30px;
+  flex-direction: column;
+  height: calc(100vh - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  padding: 0;
+}
+
+/* 顶部栏：得分居中 */
+.charades-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  flex-shrink: 0;
+}
+
+.charades-score-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.charades-score-icon { font-size: 22px; }
+.charades-score-num { font-size: 24px; color: var(--text); }
+
+/* 中央词语区域 — 占据剩余空间 */
+.charades-word-area {
+  flex: 1;
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 20px;
+  margin: 0 16px;
   border-radius: 30px;
   background: linear-gradient(135deg, #ff8a5c, #ffb74d);
   box-shadow: 0 24px 58px rgba(255, 138, 92, 0.3);
   text-align: center;
+  min-height: 0;
 }
-.charades-word-card small { margin-bottom: 16px; color: rgba(255,255,255,.72); font-weight: 800; }
-.charades-word-card strong { font-size: clamp(46px, 14vw, 72px); line-height: 1.15; }
-.gesture-legend { display: flex; justify-content: center; gap: 18px; color: var(--muted); font-size: 13px; }
-.gesture-legend b { display: inline-grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; color: white; }
-.gesture-legend .up { background: var(--green); }
-.gesture-legend .down { background: var(--danger); }
 
-.gesture-controls {
-  position: fixed;
-  z-index: 30;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  padding: 10px 18px calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(0,0,0,.06);
-  background: rgba(255,255,255,.96);
-  backdrop-filter: blur(18px);
-}
-.gesture-controls p { margin: 0 0 8px; color: var(--muted); font-size: 11px; text-align: center; }
-.gesture-enable {
-  display: block;
-  width: min(100%, 584px);
-  min-height: 38px;
-  margin: 0 auto 8px;
-  border: 1px solid rgba(49,210,195,.5);
-  border-radius: 12px;
-  color: #0d9488;
-  background: rgba(49,210,195,.1);
-  font-size: 13px;
+.charades-category-label {
+  margin-bottom: 16px;
+  color: rgba(255,255,255,.72);
   font-weight: 800;
+  font-size: 14px;
 }
-.gesture-controls > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 584px); margin: auto; }
-.gesture-button { min-height: 50px; border: 0; border-radius: 15px; font-size: 22px; font-weight: 900; }
-.gesture-button span { font-size: 14px; }
-.gesture-button.up { background: #16a34a; }
-.gesture-button.down { background: #dc2626; }
 
+.charades-word-text {
+  font-size: clamp(46px, 14vw, 72px);
+  line-height: 1.15;
+  color: var(--text);
+  word-break: break-word;
+}
+
+/* 底部：进度条 + 时间 */
+.charades-bottom-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 20px;
+  flex-shrink: 0;
+}
+
+.charades-progress-container {
+  flex: 1;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+
+.charades-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.charades-time-text {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  min-width: 50px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 手势提示 */
+.charades-play .gesture-legend {
+  padding: 0 16px 16px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   横屏提示覆盖层
+   ============================================================ */
+.landscape-hint-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(8px);
+  animation: hintFadeIn 0.3s ease-out;
+}
+
+.landscape-hint-content {
+  text-align: center;
+  color: #fff;
+  animation: hintPulse 1.5s ease-in-out infinite;
+}
+
+.landscape-hint-icon {
+  font-size: 80px;
+  display: block;
+  margin-bottom: 20px;
+}
+
+.landscape-hint-text {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0;
+}
+
+@keyframes hintFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes hintPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* ============================================================
+   倒计时覆盖层
+   ============================================================ */
 .countdown, .modal, .orientation-gate {
   position: fixed;
   inset: 0;
@@ -370,7 +475,63 @@ main { width: min(100%, 620px); margin: 0 auto; padding: 4px 18px calc(112px + e
 .modal-card h2 { margin: 12px 0 8px; }
 .modal-card p { color: var(--muted); line-height: 1.55; }
 .result-icon { font-size: 54px; }
-.result-details { max-height: 180px; margin: 18px 0; overflow: auto; color: var(--text); font-size: 14px; line-height: 1.65; }
+.result-details { max-height: 300px; margin: 18px 0; overflow: auto; color: var(--text); font-size: 14px; line-height: 1.65; }
+
+/* 暂停/结束弹窗按钮 */
+.pause-end-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 16px;
+}
+
+/* 结果弹窗按钮 */
+.result-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 16px;
+}
+
+/* ============================================================
+   你划我猜结束 — 两列词语列表
+   ============================================================ */
+.charades-result-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  text-align: left;
+}
+
+.charades-result-col h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.charades-result-col h3.col-correct { color: var(--green); }
+.charades-result-col h3.col-skip { color: var(--orange); }
+
+.charades-result-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.charades-result-col li {
+  padding: 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.charades-result-col li.correct-item { color: var(--green); }
+.charades-result-col li.skip-item { color: var(--orange); }
+
+.charades-result-empty {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+}
 
 /* 角色介绍按钮（狼人杀翻牌后显示） */
 .role-info-btn {

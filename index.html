@@ -6,21 +6,19 @@
   <meta name="theme-color" content="#151321">
   <title>聚会游戏发牌助手</title>
   <!-- 队友版本：全局样式 -->
-  <link rel="stylesheet" href="./css/style.css?v=8">
+  <link rel="stylesheet" href="./css/style.css?v=9">
   <!-- 我的版本：UI布局样式（游戏菜单、主题网格、点击动画等） -->
-  <link rel="stylesheet" href="./css/ui.css?v=1">
+  <link rel="stylesheet" href="./css/ui.css?v=2">
 </head>
 <body>
   <div id="feedback-flash" class="feedback-flash" aria-hidden="true"></div>
 
   <header class="app-header">
     <button id="back-button" class="icon-button hidden" type="button" aria-label="返回主页">←</button>
-    <div>
+    <div class="header-title-area">
       <p class="eyebrow">PARTY GAME HELPER</p>
       <h1 id="page-title">聚会游戏</h1>
     </div>
-    <button id="pause-button" class="icon-button hidden" type="button" aria-label="暂停/恢复">⏸️</button>
-    <button id="exit-button" class="icon-button hidden" type="button" aria-label="退出游戏">🚪</button>
     <button id="music-toggle" class="icon-button" type="button" aria-label="切换静音">🔊</button>
     <div class="status-dot" title="纯前端，无需登录"></div>
   </header>
@@ -155,9 +153,6 @@
             <span class="theme-label">动物</span>
           </button>
         </div>
-        <p id="charades-media-status" class="gesture-hint" role="status">
-          开始游戏时将申请麦克风和摄像头权限，结束后自动保存录像
-        </p>
       </div>
 
       <!-- 第二步：时间选择（主题选择后显示） -->
@@ -170,15 +165,32 @@
         </div>
         <button id="charades-start" class="primary-button orange" type="button">开始游戏</button>
       </div>
+
+      <!-- 游戏主界面（竖屏布局） -->
       <div id="charades-play" class="charades-play hidden">
-        <div class="charades-stats">
-          <div><small>剩余时间</small><strong id="charades-time">02:00</strong></div>
-          <div><small>当前得分</small><strong id="charades-score">0</strong></div>
+        <!-- 顶部：得分（居中） -->
+        <div class="charades-top-bar">
+          <div class="charades-score-display">
+            <span class="charades-score-icon">✅</span>
+            <span id="charades-score" class="charades-score-num">0</span>
+          </div>
         </div>
-        <div class="charades-word-card">
-          <small id="charades-category">题目</small>
-          <strong id="charades-word">准备开始</strong>
+
+        <!-- 中央：当前词语 -->
+        <div class="charades-word-area">
+          <small id="charades-category" class="charades-category-label">题目</small>
+          <strong id="charades-word" class="charades-word-text"></strong>
         </div>
+
+        <!-- 底部：进度条 + 剩余时间 -->
+        <div class="charades-bottom-bar">
+          <div class="charades-progress-container">
+            <div id="charades-bar-fill" class="charades-bar-fill" style="width:100%; background:hsl(120,85%,50%);"></div>
+          </div>
+          <span id="charades-time" class="charades-time-text">02:00</span>
+        </div>
+
+        <!-- 手势提示 -->
         <div class="gesture-legend">
           <span><b class="up">↑</b> 上翻 · 猜对</span>
           <span><b class="down">↓</b> 下翻 · 跳过</span>
@@ -197,14 +209,28 @@
     </div>
   </section>
 
+  <!-- 横屏提示覆盖层 -->
+  <div id="landscape-hint" class="landscape-hint-overlay hidden">
+    <div class="landscape-hint-content">
+      <span class="landscape-hint-icon">↻</span>
+      <p class="landscape-hint-text">请翻转手机横屏使用</p>
+    </div>
+  </div>
+
   <!-- 倒计时覆盖层 -->
   <div id="countdown" class="countdown hidden" role="status" aria-live="assertive">3</div>
 
-  <!-- 横屏提示 -->
-  <div id="orientation-gate" class="orientation-gate hidden" role="dialog" aria-modal="true">
-    <span>↻</span>
-    <h2>请将手机横过来</h2>
-    <p>横屏后才能开始你划我猜，上下翻动手机即可操作。</p>
+  <!-- 暂停/结束确认弹窗 -->
+  <div id="pause-end-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="pause-end-title">
+    <div class="modal-card">
+      <h2 id="pause-end-title">游戏进行中</h2>
+      <p id="pause-end-message">请选择操作：</p>
+      <div class="pause-end-buttons">
+        <button id="pause-end-pause" class="primary-button" type="button" style="background:linear-gradient(135deg, #ff9f43, #ef586f);">⏸️ 暂停游戏</button>
+        <button id="pause-end-end" class="primary-button" type="button" style="background:linear-gradient(135deg, #dc2626, #b91c1c); margin-top:10px;">🚪 结束游戏</button>
+        <button id="pause-end-cancel" class="primary-button" type="button" style="background:linear-gradient(135deg, #6b7280, #4b5563); margin-top:10px;">继续游戏</button>
+      </div>
+    </div>
   </div>
 
   <!-- 角色介绍弹窗 -->
@@ -219,14 +245,19 @@
     </div>
   </div>
 
-  <!-- 结果弹窗 -->
+  <!-- 结果弹窗（你划我猜结束） -->
   <div id="result-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="result-title">
     <div class="modal-card">
       <span id="result-icon" class="result-icon">🎉</span>
       <h2 id="result-title">本轮结束</h2>
       <p id="result-message"></p>
-      <div id="result-details" class="result-details"></div>
-      <button id="result-confirm" class="primary-button" type="button">返回主页</button>
+      <div id="result-details" class="result-details">
+        <!-- 两列词语列表由 JS 动态渲染 -->
+      </div>
+      <div class="result-buttons">
+        <button id="result-replay" class="primary-button" type="button" style="background:linear-gradient(135deg, #ff9f43, #ef586f);">🔄 再玩一次</button>
+        <button id="result-confirm" class="primary-button" type="button" style="margin-top:10px;">🚪 结束游戏</button>
+      </div>
     </div>
   </div>
 
@@ -241,11 +272,8 @@
   </audio>
 
   <!-- 队友版本：ES Module 主入口 -->
-  <script type="module" src="./js/main.js?v=8"></script>
+  <script type="module" src="./js/main.js?v=9"></script>
   <!-- 我的版本：UI 辅助脚本（导航、弹窗、音乐控制等） -->
-  <!-- CONFLICT: ui.js 中的 navigateTo 等函数与 main.js 的 navigate 功能重叠。
-       如果 main.js 已覆盖所有导航逻辑，ui.js 可作为备用/辅助模块保留。
-       建议：保留 ui.js 作为工具函数库，但导航统一走 main.js 的 navigate()。 -->
-  <script type="module" src="./js/ui.js?v=1"></script>
+  <script type="module" src="./js/ui.js?v=2"></script>
 </body>
 </html>

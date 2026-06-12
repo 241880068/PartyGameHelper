@@ -72,7 +72,6 @@ const gestureEnable = document.querySelector('#gesture-enable');
 const feedbackFlash = document.querySelector('#feedback-flash');
 const modal = document.querySelector('#result-modal');
 const orientationGate = document.querySelector('#orientation-gate');
-const charadesMediaStatus = document.querySelector('#charades-media-status');
 
 const pauseButton = document.querySelector('#pause-button');
 const exitButton = document.querySelector('#exit-button');
@@ -84,10 +83,6 @@ let selectedCharadesDuration = 120;
 let selectedCharadesTheme = 'film_tv';
 let currentResultAction = navigateHome;
 let charadesPausedForPortrait = false;
-let charadesMediaStream = null;
-let charadesMediaRecorder = null;
-let charadesRecordingChunks = [];
-let discardCharadesRecording = false;
 let roleImageRenderId = 0;
 const roleImageCache = new Map();
 const CARD_FLIP_DURATION = 580;
@@ -114,7 +109,10 @@ function bindEvents() {
   document.querySelectorAll('[data-game]').forEach((button) => {
     button.addEventListener('click', () => navigate(button.dataset.game));
   });
-  backButton.addEventListener('click', navigateHome);
+  backButton.addEventListener('click', () => {
+    // 直接退出游戏返回主菜单
+    exitCurrentGame();
+  });
   document.querySelector('#werewolf-start').addEventListener('click', startWerewolf);
   document.querySelector('#werewolf-action').addEventListener('click', handleWerewolfAction);
   document.querySelector('#undercover-start').addEventListener('click', startUndercover);
@@ -126,6 +124,17 @@ function bindEvents() {
   document.querySelector('#result-confirm').addEventListener('click', () => {
     closeResult();
     currentResultAction();
+  });
+  document.querySelector('#result-replay').addEventListener('click', () => {
+    closeResult();
+    // 根据当前游戏类型执行对应的"再玩一次"逻辑
+    const currentGame = store.app.activePage;
+    if (currentGame === 'charades') {
+      replayCharades();
+    } else {
+      // 对于狼人杀和谁是卧底，回到首页（它们没有"再玩一次"的概念）
+      navigateHome();
+    }
   });
   window.addEventListener('resize', handleOrientationLayoutChange);
   window.addEventListener('orientationchange', handleOrientationLayoutChange);
@@ -178,6 +187,17 @@ function bindEvents() {
     });
   }
 
+  // 暂停/结束弹窗按钮
+  document.querySelector('#pause-end-pause').addEventListener('click', () => {
+    closePauseEndModal();
+    togglePause();
+  });
+  document.querySelector('#pause-end-end').addEventListener('click', () => {
+    closePauseEndModal();
+    exitCurrentGame();
+  });
+  document.querySelector('#pause-end-cancel').addEventListener('click', closePauseEndModal);
+
   // 我的版本：初始化人数滑块（带刻度放大效果）
   initPlayerSlider('werewolf-players-slider', 'werewolf-slider-value', '#werewolf-setup .slider-marks');
 
@@ -197,6 +217,19 @@ function bindEvents() {
   if (exitButton) {
     exitButton.addEventListener('click', exitCurrentGame);
   }
+}
+
+// ============================================================
+//  暂停/结束确认弹窗
+// ============================================================
+function showPauseEndModal() {
+  const modalEl = document.getElementById('pause-end-modal');
+  if (modalEl) modalEl.classList.remove('hidden');
+}
+
+function closePauseEndModal() {
+  const modalEl = document.getElementById('pause-end-modal');
+  if (modalEl) modalEl.classList.add('hidden');
 }
 
 // ============================================================
@@ -250,6 +283,9 @@ function navigate(gameType) {
   stopCharadesTimer();
   store.app.activePage = gameType;
   pages.forEach((page) => page.classList.toggle('active', page.id === `page-${gameType}`));
+  
+  // 进入游戏页面：隐藏标题，只显示返回和音量按钮
+  document.body.classList.add('in-game');
   pageTitle.textContent = {
     werewolf: '狼人杀',
     undercover: '谁是卧底',
@@ -269,19 +305,18 @@ function navigate(gameType) {
 
 function navigateHome() {
   stopCharadesTimer();
-  if (store.app.activePage === 'charades') {
-    stopCharadesRecording();
-  }
   hideOrientationGate();
   charadesPausedForPortrait = false;
   store.app.activePage = 'home';
   pages.forEach((page) => page.classList.toggle('active', page.id === 'page-home'));
+  
+  // 回到首页：恢复标题显示
+  document.body.classList.remove('in-game');
   pageTitle.textContent = '聚会游戏';
   backButton.classList.add('hidden');
   pauseButton.classList.add('hidden');
   exitButton.classList.add('hidden');
   updateStore('app', { isPaused: false });
-  gestureController?.setEnabled(true);
   document.body.classList.remove('game-paused');
   pauseButton.textContent = '⏸️';
   gestureControls.classList.add('hidden');
@@ -526,11 +561,8 @@ async function startCharades() {
   document.getElementById('charades-time-select').classList.add('hidden');
   document.getElementById('charades-play').classList.remove('hidden');
 
-  // 显示横屏提示 Toast（2秒后自动消失，然后开始倒计时）
-  showLandscapeToast();
-
+  // 初始化游戏状态（词语区域保持空白）
   try {
-    await startCharadesRecording();
     const data = await loadGameData('charades');
     const deck = createCharadesThemeDeck(data.categories, selectedCharadesTheme);
     updateStore('charades', {
@@ -544,58 +576,55 @@ async function startCharades() {
       correctWords: [],
       passedWords: [],
     });
-    renderCharades();
-    // 等待 2 秒让 Toast 显示，然后开始倒计时
+    
+    // 词语区域初始为空白
+    document.querySelector('#charades-word').textContent = '';
+    document.querySelector('#charades-category').textContent = '';
+    document.querySelector('#charades-score').textContent = '0';
+    document.querySelector('#charades-time').textContent = formatTime(selectedCharadesDuration);
+    // 进度条初始满格
+    const fill = document.querySelector('#charades-bar-fill');
+    fill.style.width = '100%';
+    fill.style.background = 'hsl(120, 85%, 50%)';
+
+    // 禁用手势识别
+    gestureController?.setEnabled(false);
+
+    // 第一步：显示横屏提示 2 秒
+    showLandscapeHint();
     await wait(2000);
+    hideLandscapeHint();
+
+    // 第二步：显示 3 秒倒计时
     await runCountdown();
-    if (!isLandscape()) {
-      updateStore('charades', { status: 'waiting-orientation' });
-      charadesPausedForPortrait = true;
-      showOrientationGate();
-      return;
-    }
+
+    // 倒计时结束，游戏正式开始
     updateStore('charades', { status: 'playing' });
+    
+    // 显示第一个词语
+    renderCharades();
+    
+    // 启用手势识别
+    gestureController?.setEnabled(true);
+    
+    // 开始计时
     if (!store.app.isPaused) {
       startCharadesTimer();
     }
   } catch (error) {
-    stopCharadesRecording({ discard: true });
     showError(error);
   }
 }
 
-// 横屏提示 Toast — 在倒计时前显示，2秒后自动消失
-function showLandscapeToast() {
-  // 移除已存在的 toast
-  const existing = document.getElementById('landscape-toast');
-  if (existing) existing.remove();
+// 横屏提示覆盖层
+function showLandscapeHint() {
+  const hint = document.getElementById('landscape-hint');
+  if (hint) hint.classList.remove('hidden');
+}
 
-  const toast = document.createElement('div');
-  toast.id = 'landscape-toast';
-  toast.textContent = '↻ 请将手机旋转至横屏模式以获得最佳体验';
-  Object.assign(toast.style, {
-    position: 'fixed',
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    zIndex: '200',
-    padding: '16px 28px',
-    borderRadius: '16px',
-    background: 'rgba(0,0,0,0.78)',
-    color: '#fff',
-    fontSize: '18px',
-    fontWeight: '700',
-    textAlign: 'center',
-    maxWidth: '80%',
-    pointerEvents: 'none',
-    animation: 'fadeInOut 2s ease-in-out forwards',
-  });
-  document.body.appendChild(toast);
-
-  // 2秒后自动移除
-  setTimeout(() => {
-    if (toast.parentNode) toast.remove();
-  }, 2000);
+function hideLandscapeHint() {
+  const hint = document.getElementById('landscape-hint');
+  if (hint) hint.classList.add('hidden');
 }
 
 function handleCharades(direction) {
@@ -626,8 +655,22 @@ function renderCharades() {
   const current = game.deck[game.currentIndex];
   document.querySelector('#charades-time').textContent = formatTime(game.remainingSeconds);
   document.querySelector('#charades-score').textContent = String(game.score);
-  document.querySelector('#charades-word').textContent = current?.word ?? '准备开始';
-  document.querySelector('#charades-category').textContent = CATEGORY_LABELS[current?.category] ?? '题目';
+  document.querySelector('#charades-word').textContent = current?.word ?? '';
+  document.querySelector('#charades-category').textContent = CATEGORY_LABELS[current?.category] ?? '';
+  
+  // 更新进度条
+  updateCharadesProgressBar();
+}
+
+function updateCharadesProgressBar() {
+  const game = store.charades;
+  if (!game.duration) return;
+  const pct = Math.max(0, (game.remainingSeconds / game.duration) * 100);
+  const fill = document.querySelector('#charades-bar-fill');
+  fill.style.width = pct + '%';
+  // HSL interpolation: 0% = red (hue 0), 50% = yellow (hue 60), 100% = green (hue 120)
+  const hue = (pct / 100) * 120;
+  fill.style.background = `hsl(${hue}, 85%, 50%)`;
 }
 
 function startCharadesTimer() {
@@ -686,10 +729,8 @@ function togglePause() {
     gestureController?.setEnabled(!newState);
     if (newState) {
       stopCharadesTimer(); // 暂停：清除定时器
-      pauseCharadesRecording();
     } else if (store.charades.status === 'playing' && isLandscape()) {
       startCharadesTimer(); // 恢复：重启定时器
-      resumeCharadesRecording();
     }
   }
 
@@ -710,42 +751,98 @@ function isLandscape() {
 }
 
 function showOrientationGate() {
-  orientationGate.classList.remove('hidden');
+  if (orientationGate) orientationGate.classList.remove('hidden');
 }
 
 function hideOrientationGate() {
-  orientationGate.classList.add('hidden');
+  if (orientationGate) orientationGate.classList.add('hidden');
 }
 
 function finishCharades() {
   stopCharadesTimer();
-  stopCharadesRecording();
+  gestureController?.setEnabled(false);
   updateStore('charades', { status: 'ended' });
   const game = store.charades;
   const summary = createCharadesSummary(game);
-  const correctDetails = summary.correctWords.length
-    ? summary.correctWords.join('、')
-    : '无';
-  const incorrectDetails = summary.incorrectWords.length
-    ? summary.incorrectWords.join('、')
-    : '无';
-  const details = `猜对 ${summary.correctCount} 个：${correctDetails}\n猜错 ${summary.incorrectCount} 个：${incorrectDetails}`;
+  
+  // 构建两列词语列表的 HTML
+  const correctWords = summary.correctWords || game.correctWords || [];
+  const passedWords = summary.incorrectWords || game.passedWords || [];
+  
+  let detailsHtml = '<div class="charades-result-columns">';
+  
+  // 左列：答对的词语
+  detailsHtml += '<div class="charades-result-col">';
+  detailsHtml += `<h3 class="col-correct">✅ 答对 (${correctWords.length})</h3>`;
+  if (correctWords.length === 0) {
+    detailsHtml += '<p class="charades-result-empty">暂无</p>';
+  } else {
+    detailsHtml += '<ul>';
+    correctWords.forEach(word => {
+      detailsHtml += `<li class="correct-item">${word}</li>`;
+    });
+    detailsHtml += '</ul>';
+  }
+  detailsHtml += '</div>';
+  
+  // 右列：跳过的词语
+  detailsHtml += '<div class="charades-result-col">';
+  detailsHtml += `<h3 class="col-skip">⏭️ 跳过 (${passedWords.length})</h3>`;
+  if (passedWords.length === 0) {
+    detailsHtml += '<p class="charades-result-empty">暂无</p>';
+  } else {
+    detailsHtml += '<ul>';
+    passedWords.forEach(word => {
+      detailsHtml += `<li class="skip-item">${word}</li>`;
+    });
+    detailsHtml += '</ul>';
+  }
+  detailsHtml += '</div>';
+  
+  detailsHtml += '</div>';
+  
   showResult(
     '🎉',
     `本轮得分 ${summary.score}`,
-    details,
+    `猜对 ${correctWords.length} 个 · 跳过 ${passedWords.length} 个`,
+    detailsHtml,
   );
+}
 
-  // 我的版本：在结果弹窗中展示详细词语列表
-  showCharadesEndSummary(summary.correctWords, summary.incorrectWords);
+function replayCharades() {
+  // 重置你划我猜状态，回到主题选择页面
+  closeResult();
+  stopCharadesTimer();
+  gestureController?.setEnabled(false);
+  
+  // 重置 store
+  resetStoreSection('charades');
+  
+  // 隐藏游戏界面，显示设置界面
+  document.getElementById('charades-play').classList.add('hidden');
+  document.getElementById('charades-setup').classList.remove('hidden');
+  document.getElementById('charades-time-select').classList.add('hidden');
+  
+  // 重置进度条
+  const fill = document.querySelector('#charades-bar-fill');
+  if (fill) {
+    fill.style.width = '100%';
+    fill.style.background = 'hsl(120, 85%, 50%)';
+  }
+  
+  // 重置词语区域
+  document.querySelector('#charades-word').textContent = '';
+  document.querySelector('#charades-category').textContent = '';
+  document.querySelector('#charades-score').textContent = '0';
+  document.querySelector('#charades-time').textContent = formatTime(selectedCharadesDuration);
 }
 
 async function runCountdown() {
   const overlay = document.querySelector('#countdown');
   overlay.classList.remove('hidden');
-  for (const value of ['3', '2', '1', '开始']) {
+  for (const value of ['3', '2', '1']) {
     overlay.textContent = value;
-    await wait(value === '开始' ? 500 : 800);
+    await wait(1000);
   }
   overlay.classList.add('hidden');
 }
@@ -758,116 +855,6 @@ function handleGesture(direction) {
   provideFeedback(direction);
   playEffect(direction === 'up' ? 'correct' : 'skip');
   handleCharades(direction);
-}
-
-async function startCharadesRecording() {
-  if (!charadesMediaStatus) return;
-  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-    charadesMediaStatus.textContent = '当前浏览器不支持录音录像，仍可继续游戏';
-    return;
-  }
-
-  charadesMediaStatus.textContent = '正在申请麦克风和摄像头权限…';
-  try {
-    charadesMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-    charadesRecordingChunks = [];
-    discardCharadesRecording = false;
-
-    const mimeType = getSupportedRecordingMimeType();
-    charadesMediaRecorder = mimeType
-      ? new MediaRecorder(charadesMediaStream, { mimeType })
-      : new MediaRecorder(charadesMediaStream);
-    charadesMediaRecorder.addEventListener('dataavailable', (event) => {
-      if (event.data.size > 0) {
-        charadesRecordingChunks.push(event.data);
-      }
-    });
-    charadesMediaRecorder.addEventListener('stop', saveCharadesRecording);
-    charadesMediaRecorder.start(1000);
-    charadesMediaStatus.textContent = '正在录音录像，游戏结束后将自动保存';
-  } catch (error) {
-    console.warn('[charades] Media permission was not granted:', error);
-    releaseCharadesMediaStream();
-    charadesMediaStatus.textContent = '未获得录音录像权限，仍可继续游戏';
-  }
-}
-
-function pauseCharadesRecording() {
-  if (charadesMediaRecorder?.state === 'recording') {
-    charadesMediaRecorder.pause();
-    charadesMediaStatus.textContent = '游戏已暂停，录音录像同步暂停';
-  }
-}
-
-function resumeCharadesRecording() {
-  if (charadesMediaRecorder?.state === 'paused') {
-    charadesMediaRecorder.resume();
-    charadesMediaStatus.textContent = '正在录音录像，游戏结束后将自动保存';
-  }
-}
-
-function stopCharadesRecording({ discard = false } = {}) {
-  if (!charadesMediaRecorder) {
-    releaseCharadesMediaStream();
-    return;
-  }
-
-  discardCharadesRecording = discardCharadesRecording || discard;
-  if (charadesMediaRecorder.state !== 'inactive') {
-    charadesMediaRecorder.stop();
-  }
-}
-
-function saveCharadesRecording() {
-  const recorder = charadesMediaRecorder;
-  const chunks = charadesRecordingChunks;
-  const shouldDiscard = discardCharadesRecording;
-  charadesMediaRecorder = null;
-  charadesRecordingChunks = [];
-  discardCharadesRecording = false;
-  releaseCharadesMediaStream();
-
-  if (shouldDiscard || chunks.length === 0) return;
-
-  const mimeType = recorder.mimeType || chunks[0].type || 'video/webm';
-  const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
-  const blob = new Blob(chunks, { type: mimeType });
-  const downloadUrl = URL.createObjectURL(blob);
-  const downloadLink = document.createElement('a');
-  downloadLink.href = downloadUrl;
-  downloadLink.download = `你划我猜-${formatRecordingTime(new Date())}.${extension}`;
-  document.body.append(downloadLink);
-  downloadLink.click();
-  downloadLink.remove();
-  window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-  charadesMediaStatus.textContent = '录像已生成，请在手机"下载"中查看';
-}
-
-function releaseCharadesMediaStream() {
-  charadesMediaStream?.getTracks().forEach((track) => track.stop());
-  charadesMediaStream = null;
-}
-
-function getSupportedRecordingMimeType() {
-  if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
-  return [
-    'video/mp4',
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
-  ].find((type) => MediaRecorder.isTypeSupported(type)) ?? '';
-}
-
-function formatRecordingTime(date) {
-  const parts = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
-    String(date.getHours()).padStart(2, '0'),
-    String(date.getMinutes()).padStart(2, '0'),
-    String(date.getSeconds()).padStart(2, '0'),
-  ];
-  return `${parts.slice(0, 3).join('')}-${parts.slice(3).join('')}`;
 }
 
 function provideFeedback(direction) {
@@ -913,7 +900,12 @@ function showResult(icon, title, message, details = '') {
   document.querySelector('#result-icon').textContent = icon;
   document.querySelector('#result-title').textContent = title;
   document.querySelector('#result-message').textContent = message;
-  document.querySelector('#result-details').textContent = details;
+  const detailsEl = document.querySelector('#result-details');
+  if (details) {
+    detailsEl.innerHTML = details;
+  } else {
+    detailsEl.textContent = '';
+  }
   modal.classList.remove('hidden');
   currentResultAction = navigateHome;
 }
