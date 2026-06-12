@@ -136,8 +136,8 @@ function bindEvents() {
     closeResult();
     currentResultAction();
   });
-  window.addEventListener('resize', handleOrientationLayoutChange);
-  window.addEventListener('orientationchange', handleOrientationLayoutChange);
+  window.addEventListener('resize', scheduleOrientationLayoutCheck);
+  window.addEventListener('orientationchange', scheduleOrientationLayoutCheck);
 
   const playerRange = document.querySelector('#undercover-players');
   const countRange = document.querySelector('#undercover-count');
@@ -709,6 +709,12 @@ function stopCharadesTimer() {
   }
 }
 
+function scheduleOrientationLayoutCheck() {
+  handleOrientationLayoutChange();
+  window.setTimeout(handleOrientationLayoutChange, 150);
+  window.setTimeout(handleOrientationLayoutChange, 400);
+}
+
 function handleOrientationLayoutChange() {
   if (store.app.activePage !== 'charades') return;
 
@@ -777,7 +783,8 @@ function exitCurrentGame() {
 }
 
 function isLandscape() {
-  return window.innerWidth > window.innerHeight;
+  return window.matchMedia?.('(orientation: landscape)').matches
+    ?? window.innerWidth > window.innerHeight;
 }
 
 function showOrientationGate() {

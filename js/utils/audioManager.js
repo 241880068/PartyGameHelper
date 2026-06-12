@@ -19,9 +19,9 @@ const getAudioElements = () => ({
 export function unlockAudioOnFirstTouch() {
   if (audioUnlocked) return;
   
-  const { bgm, correct, skip } = getAudioElements();
-  // 播放并立即暂停，以骗过浏览器的安全策略
-  [bgm, correct, skip].forEach(audio => {
+  const { correct, skip } = getAudioElements();
+  // 背景音乐由当前点击事件直接播放，这里只预解锁短音效。
+  [correct, skip].forEach(audio => {
     if (audio) {
       audio.volume = 0; // 静音播放
       const playPromise = audio.play();
@@ -55,12 +55,17 @@ export function toggleMute() {
  * @param {'werewolf' | 'undercover' | 'charades'} gameType - 游戏类型
  */
 export function playBGM(gameType) {
-  // 如果已经播放同一首，不重复切换
-  if (currentBGMType === gameType) return;
-
   const { bgm } = getAudioElements();
   if (!bgm) {
     console.warn('[Audio] bgm-audio 元素不存在');
+    return;
+  }
+
+  // 同一首音乐如果曾被浏览器暂停，则在新的用户操作中重试播放。
+  if (currentBGMType === gameType) {
+    if (!store.app.isMuted && bgm.paused) {
+      bgm.play().catch(e => console.warn('[Audio] BGM 重试播放被阻止:', e.message));
+    }
     return;
   }
 
