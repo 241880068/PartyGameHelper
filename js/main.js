@@ -17,6 +17,7 @@ import {
   toggleMute,
   playBGM,
   playEffect,
+  resumeBGM,
   stopBGM,
 } from './utils/audioManager.js';
 // 导入我的版本 UI 辅助函数
@@ -104,6 +105,10 @@ async function initialize() {
   bindEvents();
   document.body.addEventListener('click', unlockAudioOnFirstTouch, { once: true });
   document.body.addEventListener('touchstart', unlockAudioOnFirstTouch, { once: true });
+  document.body.addEventListener('pointerdown', resumeBGM);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) resumeBGM();
+  });
   gestureController = initGestureRecognition({
     fallbackRoot: null,
     onSwipeUp: () => handleGesture('up'),
@@ -401,7 +406,6 @@ async function handleWerewolfAction() {
     updateStore('werewolf', { status: 'finished' });
     werewolfCardTransitioning = false;
     setActionButtonBusy('werewolf-action', false);
-    stopBGM();
     showResult('🐺', '身份发放完成', '请收起手机，开始夜晚流程。');
     return;
   }
@@ -542,7 +546,6 @@ async function handleUndercoverAction() {
     updateStore('undercover', { status: 'finished' });
     undercoverCardTransitioning = false;
     setActionButtonBusy('undercover-action', false);
-    stopBGM();
     showResult('🕵️', '词语发放完成', '所有人依次描述自己的词语，找出卧底吧。');
     return;
   }

@@ -5,6 +5,7 @@ let audioUnlocked = false;
 
 // 当前正在播放的 BGM 类型（'werewolf' | 'undercover' | 'charades' | null）
 let currentBGMType = null;
+let currentBGMSource = null;
 
 const getAudioElements = () => ({
   bgm: document.getElementById('bgm-audio'),
@@ -47,7 +48,14 @@ export function toggleMute() {
     if (audio) audio.muted = newMutedState;
   });
 
+  if (!newMutedState) resumeBGM();
   return newMutedState;
+}
+
+export function resumeBGM() {
+  const { bgm } = getAudioElements();
+  if (!bgm || !currentBGMType || store.app.isMuted || !bgm.paused) return;
+  bgm.play().catch(e => console.warn('[Audio] BGM 恢复播放被阻止:', e.message));
 }
 
 /**
@@ -61,11 +69,9 @@ export function playBGM(gameType) {
     return;
   }
 
-  // 同一首音乐如果曾被浏览器暂停，则在新的用户操作中重试播放。
+  // 同一个游戏如果曾被浏览器暂停，则在新的用户操作中重试播放。
   if (currentBGMType === gameType) {
-    if (!store.app.isMuted && bgm.paused) {
-      bgm.play().catch(e => console.warn('[Audio] BGM 重试播放被阻止:', e.message));
-    }
+    resumeBGM();
     return;
   }
 
@@ -80,10 +86,14 @@ export function playBGM(gameType) {
 
   console.log(`[Audio] 切换 BGM 到: ${src}`);
 
-  // 方法：直接设置 audio.src 属性（比操作 source 元素更可靠）
-  bgm.src = src;
+  // 狼人杀和谁是卧底共用同一文件，切换时不要重新加载和归零。
+  if (currentBGMSource !== src) {
+    bgm.src = src;
+    bgm.load();
+    bgm.currentTime = 0;
+    currentBGMSource = src;
+  }
   bgm.loop = true;
-  bgm.currentTime = 0;
 
   // 如果已静音，不播放
   if (store.app.isMuted) {
@@ -113,6 +123,9 @@ export function stopBGM() {
   bgm.pause();
   bgm.currentTime = 0;
   currentBGMType = null;
+  currentBGMSource = null;
+  bgm.removeAttribute('src');
+  bgm.load();
   console.log('[Audio] BGM 已停止');
 }
 
