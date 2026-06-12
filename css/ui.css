@@ -1,0 +1,171 @@
+/* ============================================================
+   ui.css — 我的版本 UI 布局样式
+   说明：此文件包含我的自定义游戏菜单布局、主题网格、
+   点击动画等样式。与 style.css（队友版本）配合使用。
+   ============================================================ */
+
+/* ============================================================
+   1. 游戏菜单布局（首页）
+   使用 flex 实现：
+   - 第一行：你划我猜（full-width 独占一行）
+   - 第二行：狼人杀 + 谁是卧底（half-width 并排）
+   ============================================================ */
+.game-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.game-row {
+  display: flex;
+  gap: 14px;
+}
+
+.game-row.full-width {
+  /* 独占一行 */
+}
+
+.game-row.half-row {
+  /* 两个并排 */
+}
+
+.game-item {
+  flex: 1;
+  min-height: 134px;
+  padding: 20px;
+  border: 0;
+  border-radius: var(--radius, 24px);
+  text-align: left;
+  color: var(--text, #fffaf2);
+  box-shadow: 0 16px 42px rgba(0,0,0,.18);
+  cursor: pointer;
+  /* 点击动画：过渡 */
+  transition: transform 0.15s cubic-bezier(0.2, 0.75, 0.25, 1);
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* 点击缩放效果 */
+.game-item:active {
+  transform: scale(0.95);
+}
+
+.game-item strong,
+.game-item small {
+  display: block;
+}
+
+.game-item strong {
+  margin-top: 22px;
+  font-size: 21px;
+}
+
+.game-item small {
+  margin-top: 7px;
+  color: rgba(255,255,255,.76);
+  line-height: 1.45;
+}
+
+.game-item .game-icon {
+  font-size: 38px;
+}
+
+/* 各游戏卡片背景色 — 多巴胺风格（6色系） */
+.game-item-charades {
+  background: linear-gradient(135deg, #ff8a5c, #ffb74d);
+  box-shadow: 0 12px 32px rgba(255, 138, 92, 0.35);
+}
+
+.game-item-werewolf {
+  background: linear-gradient(135deg, #b388ff, #ea80fc);
+  box-shadow: 0 12px 32px rgba(179, 136, 255, 0.35);
+}
+
+.game-item-undercover {
+  background: linear-gradient(135deg, #00bcd4, #4dd0e1);
+  box-shadow: 0 12px 32px rgba(0, 188, 212, 0.35);
+}
+
+/* ============================================================
+   2. 主题选择网格（你划我猜）
+   每行两个，尺寸与游戏卡片一致
+   ============================================================ */
+.theme-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.theme-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 100px;
+  padding: 16px;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: var(--radius, 24px);
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,.04);
+  /* 点击动画：过渡 */
+  transition: transform 0.15s cubic-bezier(0.2, 0.75, 0.25, 1), border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* 点击缩放效果 */
+.theme-item:active {
+  transform: scale(0.95);
+}
+
+.theme-item.selected {
+  border-color: var(--pink, #ff5d8f);
+  background: rgba(255,93,143,.18);
+  box-shadow: inset 0 0 0 1px var(--pink, #ff5d8f);
+}
+
+.theme-icon {
+  font-size: 32px;
+}
+
+.theme-label {
+  font-size: 16px;
+}
+
+/* ============================================================
+   3. 通用点击动画（补充）
+   为所有可点击卡片添加 :active 效果
+   ============================================================ */
+/* 游戏卡片（兼容队友版本的 .game-card 类） */
+.game-card:active {
+  transform: scale(0.95) !important;
+  /* 覆盖 style.css 中的 scale(.97) */
+}
+
+/* 主题选项（兼容队友版本可能使用的 .theme-select 等） */
+.duration-options button:active,
+.number-grid button:active {
+  transform: scale(0.95);
+  transition: transform 0.15s cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+/* ============================================================
+   4. 响应式：桌面端保持布局
+   ============================================================ */
+@media (min-width: 700px) {
+  .game-menu {
+    max-width: 620px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .theme-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

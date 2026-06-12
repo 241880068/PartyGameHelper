@@ -1,0 +1,972 @@
+import {
+  createCharadesSummary,
+  createCharadesThemeDeck,
+  createUndercoverRound,
+  createWerewolfDeck,
+  getUndercoverCount,
+  getWerewolfRoleDescription,
+  loadGameData,
+  recordCharadesResult,
+  saveProgress,
+} from './gameLogic.js';
+import { initGestureRecognition } from './gesture.js';
+import { resetStoreSection, store, updateStore } from './store.js';
+import { shuffle } from './utils/shuffle.js';
+import {
+  unlockAudioOnFirstTouch,
+  toggleMute,
+  playBGM,
+  playEffect,
+  stopBGM,
+} from './utils/audioManager.js';
+// 导入我的版本 UI 辅助函数
+import { bindCharadesThemeSelection, updateCharadesProgress, showCharadesEndSummary } from './ui.js';
+
+const ROLE_IMAGES = {
+  狼人: 'werewolf.jpg',
+  预言家: 'seer.jpg',
+  女巫: 'witch.jpg',
+  猎人: 'hunter.jpg',
+  守卫: 'guard.jpg',
+  白痴: 'idiot.jpg',
+  丘比特: '丘比特.jpg',
+  平民: 'villager.jpg',
+};
+
+const ROLE_EMOJI = {
+  狼人: '🐺',
+  预言家: '🔮',
+  女巫: '🧪',
+  猎人: '🏹',
+  守卫: '🛡️',
+  白痴: '🃏',
+  丘比特: '💘',
+  平民: '👤',
+};
+
+// 狼人杀角色卡牌背景色映射（与 state.js 保持一致）
+const ROLE_BG_COLORS = {
+  狼人: 'linear-gradient(145deg, #2d1b1b, #5c3a3a)',
+  预言家: 'linear-gradient(145deg, #1a237e, #3949ab)',
+  女巫: 'linear-gradient(145deg, #4a148c, #7b1fa2)',
+  猎人: 'linear-gradient(145deg, #1b5e20, #388e3c)',
+  守卫: 'linear-gradient(145deg, #e65100, #f57c00)',
+  白痴: 'linear-gradient(145deg, #880e4f, #ad1457)',
+  平民: 'linear-gradient(145deg, #37474f, #546e7a)',
+};
+
+const CATEGORY_LABELS = {
+  film_tv: '影视',
+  sports: '运动',
+  food: '美食',
+  celebrities: '明星',
+  animals: '动物',
+};
+
+const pages = [...document.querySelectorAll('.page')];
+const pageTitle = document.querySelector('#page-title');
+const backButton = document.querySelector('#back-button');
+const gestureControls = document.querySelector('#gesture-controls');
+const gestureStatus = document.querySelector('#gesture-status');
+const gestureEnable = document.querySelector('#gesture-enable');
+const feedbackFlash = document.querySelector('#feedback-flash');
+const modal = document.querySelector('#result-modal');
+const orientationGate = document.querySelector('#orientation-gate');
+const charadesMediaStatus = document.querySelector('#charades-media-status');
+
+const pauseButton = document.querySelector('#pause-button');
+const exitButton = document.querySelector('#exit-button');
+
+let gestureController;
+let charadesTimer;
+let selectedWerewolfPlayers = 6;
+let selectedCharadesDuration = 120;
+let selectedCharadesTheme = 'film_tv';
+let currentResultAction = navigateHome;
+let charadesPausedForPortrait = false;
+let charadesMediaStream = null;
+let charadesMediaRecorder = null;
+let charadesRecordingChunks = [];
+let discardCharadesRecording = false;
+let roleImageRenderId = 0;
+const roleImageCache = new Map();
+const CARD_FLIP_DURATION = 580;
+let werewolfCardTransitioning = false;
+let undercoverCardTransitioning = false;
+
+document.addEventListener('DOMContentLoaded', initialize);
+
+async function initialize() {
+  bindEvents();
+  document.body.addEventListener('click', unlockAudioOnFirstTouch, { once: true });
+  document.body.addEventListener('touchstart', unlockAudioOnFirstTouch, { once: true });
+  gestureController = initGestureRecognition({
+    fallbackRoot: null,
+    onSwipeUp: () => handleGesture('up'),
+    onSwipeDown: () => handleGesture('down'),
+  });
+  syncGestureStatus();
+  window.setInterval(syncGestureStatus, 400);
+}
+
+function bindEvents() {
+  // 绑定游戏菜单按钮（兼容我的版本 .game-item 和队友版本 [data-game]）
+  document.querySelectorAll('[data-game]').forEach((button) => {
+    button.addEventListener('click', () => navigate(button.dataset.game));
+  });
+  backButton.addEventListener('click', navigateHome);
+  document.querySelector('#werewolf-start').addEventListener('click', startWerewolf);
+  document.querySelector('#werewolf-action').addEventListener('click', handleWerewolfAction);
+  document.querySelector('#undercover-start').addEventListener('click', startUndercover);
+  document.querySelector('#undercover-action').addEventListener('click', handleUndercoverAction);
+  document.querySelector('#charades-start').addEventListener('click', startCharades);
+  document.querySelector('#gesture-up').addEventListener('click', () => handleGesture('up'));
+  document.querySelector('#gesture-down').addEventListener('click', () => handleGesture('down'));
+  gestureEnable.addEventListener('click', requestGesturePermission);
+  document.querySelector('#result-confirm').addEventListener('click', () => {
+    closeResult();
+    currentResultAction();
+  });
+  window.addEventListener('resize', handleOrientationLayoutChange);
+  window.addEventListener('orientationchange', handleOrientationLayoutChange);
+
+  const playerRange = document.querySelector('#undercover-players');
+  const countRange = document.querySelector('#undercover-count');
+  playerRange.addEventListener('input', () => {
+    const recommendedCount = getUndercoverCount(Number(playerRange.value));
+    document.querySelector('#undercover-player-output').textContent = `${playerRange.value} 人`;
+    countRange.max = String(recommendedCount);
+    countRange.value = String(recommendedCount);
+    document.querySelector('#undercover-count-output').textContent = `${countRange.value} 人`;
+  });
+  countRange.addEventListener('input', () => {
+    document.querySelector('#undercover-count-output').textContent = `${countRange.value} 人`;
+  });
+
+  // 时长选择按钮
+  document.querySelectorAll('[data-duration]').forEach((button) => {
+    button.addEventListener('click', () => {
+      document.querySelectorAll('[data-duration]').forEach((item) => item.classList.remove('selected'));
+      button.classList.add('selected');
+      selectedCharadesDuration = Number(button.dataset.duration);
+    });
+  });
+
+  // 我的版本：主题网格选择（每行两个的 theme-list）
+  bindCharadesThemeSelection();
+  // 监听主题选择自定义事件 — 选择主题后进入时间选择页面
+  window.addEventListener('charadesThemeSelected', (e) => {
+    selectedCharadesTheme = e.detail.theme;
+    // 隐藏主题选择，显示时间选择
+    document.getElementById('charades-setup').classList.add('hidden');
+    document.getElementById('charades-time-select').classList.remove('hidden');
+  });
+
+  // 兼容：如果存在旧版 select 主题选择器，也绑定
+  const themeSelect = document.querySelector('#charades-theme');
+  if (themeSelect) {
+    themeSelect.addEventListener('change', (event) => {
+      selectedCharadesTheme = event.target.value;
+    });
+  }
+
+  const musicBtn = document.querySelector('#music-toggle');
+  if (musicBtn) {
+    musicBtn.addEventListener('click', () => {
+      const isMuted = toggleMute();
+      musicBtn.textContent = isMuted ? '🔇' : '🔊';
+    });
+  }
+
+  // 我的版本：初始化人数滑块（带刻度放大效果）
+  initPlayerSlider('werewolf-players-slider', 'werewolf-slider-value', '#werewolf-setup .slider-marks');
+
+  // 角色介绍按钮
+  const roleInfoBtn = document.querySelector('#werewolf-role-info-btn');
+  if (roleInfoBtn) {
+    roleInfoBtn.addEventListener('click', showWerewolfRoleInfo);
+  }
+  const roleInfoClose = document.querySelector('#role-info-close');
+  if (roleInfoClose) {
+    roleInfoClose.addEventListener('click', closeWerewolfRoleInfo);
+  }
+
+  if (pauseButton) {
+    pauseButton.addEventListener('click', togglePause);
+  }
+  if (exitButton) {
+    exitButton.addEventListener('click', exitCurrentGame);
+  }
+}
+
+// ============================================================
+//  我的版本：人数滑块初始化（带刻度放大效果）
+//  与队友版本的 initPlayerSlider 合并，保留我的刻度样式
+// ============================================================
+function initPlayerSlider(sliderId, outputId, marksContainerSelector) {
+  const slider = document.querySelector(`#${sliderId}`);
+  const output = document.querySelector(`#${outputId}`);
+  const marks = document.querySelectorAll(`${marksContainerSelector} .mark`);
+  // 我的版本：滑块上方数值显示
+  const valueDisplay = document.querySelector(`#${sliderId.replace('slider', 'slider-value')}`);
+
+  if (!slider) return;
+
+  // 初始更新
+  const updateSlider = () => {
+    const currentValue = parseInt(slider.value, 10);
+
+    // 1. 更新显示的文本
+    if (output) {
+      output.textContent = currentValue;
+    }
+
+    // 2. 更新滑块上方数值显示
+    if (valueDisplay) {
+      valueDisplay.textContent = `${currentValue} 人`;
+    }
+
+    // 3. 更新狼人杀的全局变量
+    if (sliderId === 'werewolf-players-slider') {
+      selectedWerewolfPlayers = currentValue;
+    }
+
+    // 4. 处理刻度放大效果（我的版本特色）
+    marks.forEach(mark => {
+      const markValue = parseInt(mark.dataset.value, 10);
+      mark.classList.toggle('active', markValue === currentValue);
+    });
+  };
+
+  slider.addEventListener('input', updateSlider);
+  // 初始调用一次
+  updateSlider();
+}
+
+function navigate(gameType) {
+  // 确保音频上下文已解锁（用户点击触发的）
+  unlockAudioOnFirstTouch();
+
+  stopCharadesTimer();
+  store.app.activePage = gameType;
+  pages.forEach((page) => page.classList.toggle('active', page.id === `page-${gameType}`));
+  pageTitle.textContent = {
+    werewolf: '狼人杀',
+    undercover: '谁是卧底',
+    charades: '你划我猜',
+  }[gameType];
+  backButton.classList.remove('hidden');
+  // 暂停按钮仅在你划我猜页面显示（狼人杀和谁是卧底不需要暂停）
+  pauseButton.classList.toggle('hidden', gameType !== 'charades');
+  exitButton.classList.remove('hidden');
+  gestureControls.classList.toggle('hidden', gameType !== 'charades');
+  resetGameView(gameType);
+
+  // 进入游戏页面时自动播放对应的背景音乐
+  // 狼人杀和谁是卧底使用 发牌.mp3，你划我猜使用 你划我猜.mp3
+  playBGM(gameType);
+}
+
+function navigateHome() {
+  stopCharadesTimer();
+  if (store.app.activePage === 'charades') {
+    stopCharadesRecording();
+  }
+  hideOrientationGate();
+  charadesPausedForPortrait = false;
+  store.app.activePage = 'home';
+  pages.forEach((page) => page.classList.toggle('active', page.id === 'page-home'));
+  pageTitle.textContent = '聚会游戏';
+  backButton.classList.add('hidden');
+  pauseButton.classList.add('hidden');
+  exitButton.classList.add('hidden');
+  updateStore('app', { isPaused: false });
+  gestureController?.setEnabled(true);
+  document.body.classList.remove('game-paused');
+  pauseButton.textContent = '⏸️';
+  gestureControls.classList.add('hidden');
+  stopBGM();
+}
+
+function resetGameView(gameType) {
+  resetStoreSection(gameType);
+  document.querySelector(`#${gameType}-setup`).classList.remove('hidden');
+  document.querySelector(`#${gameType}-play`).classList.add('hidden');
+  document.querySelector(`#${gameType}-card`)?.classList.remove('revealed');
+
+  // 你划我猜特殊处理：重置为第一步（主题选择），隐藏时间选择
+  if (gameType === 'charades') {
+    document.getElementById('charades-setup').classList.remove('hidden');
+    document.getElementById('charades-time-select').classList.add('hidden');
+  }
+}
+
+async function startWerewolf() {
+  const startButton = document.querySelector('#werewolf-start');
+  startButton.disabled = true;
+  startButton.textContent = '正在加载身份牌…';
+  try {
+    const data = await loadGameData('werewolf');
+    werewolfRoleDescriptionsCache = data.roleDescriptions ?? {};
+    const config = data.playerConfigs[String(selectedWerewolfPlayers)];
+    const assignedRoles = createWerewolfDeck(config);
+    await preloadRoleImages(assignedRoles);
+    updateStore('werewolf', {
+      status: 'dealing',
+      totalPlayers: selectedWerewolfPlayers,
+      assignedRoles,
+      currentPlayerIndex: 0,
+      revealed: false,
+    });
+    document.querySelector('#werewolf-setup').classList.add('hidden');
+    document.querySelector('#werewolf-play').classList.remove('hidden');
+    renderWerewolf();
+    saveProgress('werewolf', store.werewolf);
+  } catch (error) {
+    showError(error);
+  } finally {
+    startButton.disabled = false;
+    startButton.textContent = '开始';
+  }
+}
+
+async function handleWerewolfAction() {
+  const game = store.werewolf;
+  if (game.status !== 'dealing' || werewolfCardTransitioning) return;
+
+  if (!game.revealed) {
+    werewolfCardTransitioning = true;
+    setActionButtonBusy('werewolf-action', true);
+    updateStore('werewolf', { revealed: true });
+    renderWerewolf();
+    await wait(CARD_FLIP_DURATION);
+    werewolfCardTransitioning = false;
+    setActionButtonBusy('werewolf-action', false);
+    return;
+  }
+
+  werewolfCardTransitioning = true;
+  setActionButtonBusy('werewolf-action', true);
+  const nextIndex = game.currentPlayerIndex + 1;
+  updateStore('werewolf', { revealed: false });
+  renderWerewolf();
+  await wait(CARD_FLIP_DURATION);
+
+  if (nextIndex >= game.totalPlayers) {
+    updateStore('werewolf', { status: 'finished' });
+    werewolfCardTransitioning = false;
+    setActionButtonBusy('werewolf-action', false);
+    stopBGM();
+    showResult('🐺', '身份发放完成', '请收起手机，开始夜晚流程。');
+    return;
+  }
+
+  updateStore('werewolf', { currentPlayerIndex: nextIndex });
+  renderWerewolf();
+  saveProgress('werewolf', store.werewolf);
+  werewolfCardTransitioning = false;
+  setActionButtonBusy('werewolf-action', false);
+}
+
+function renderWerewolf() {
+  const game = store.werewolf;
+  const role = game.assignedRoles[game.currentPlayerIndex];
+  const card = document.querySelector('#werewolf-card');
+  card.classList.toggle('revealed', game.revealed);
+  document.querySelector('#werewolf-action').textContent = game.revealed
+    ? '我记住了，传给下一位'
+    : '查看身份';
+  document.querySelector('#werewolf-player-label').textContent = `第 ${game.currentPlayerIndex + 1} 位玩家`;
+  document.querySelector('#werewolf-progress-label').textContent = `${game.currentPlayerIndex + 1} / ${game.totalPlayers}`;
+  document.querySelector('#werewolf-progress').style.width = `${((game.currentPlayerIndex + 1) / game.totalPlayers) * 100}%`;
+  document.querySelector('#werewolf-role-name').textContent = role;
+
+  // 角色介绍按钮：翻牌后才显示
+  const roleInfoBtn = document.querySelector('#werewolf-role-info-btn');
+  if (roleInfoBtn) {
+    roleInfoBtn.classList.toggle('hidden', !game.revealed);
+  }
+
+  // 多巴胺风格：根据角色设置卡牌背面背景色
+  const roleCard = document.querySelector('#werewolf-card .role-card');
+  if (roleCard) {
+    roleCard.style.background = ROLE_BG_COLORS[role] || 'linear-gradient(145deg, #6B7280, #4B5563)';
+  }
+
+  const image = document.querySelector('#werewolf-role-image');
+  const fallback = document.querySelector('#werewolf-role-fallback');
+  const imageFile = ROLE_IMAGES[role];
+  const imageUrl = imageFile ? `./wolfcard/${imageFile}` : '';
+  const renderId = ++roleImageRenderId;
+
+  image.removeAttribute('src');
+  image.style.display = 'none';
+  image.alt = `${role}身份牌`;
+  fallback.textContent = ROLE_EMOJI[role] ?? '🎴';
+  fallback.style.display = 'block';
+
+  if (!imageUrl || roleImageCache.get(imageUrl) === false) {
+    return;
+  }
+
+  image.onload = () => {
+    if (renderId !== roleImageRenderId) return;
+    image.style.display = '';
+    fallback.style.display = 'none';
+  };
+  image.onerror = () => {
+    if (renderId !== roleImageRenderId) return;
+    roleImageCache.set(imageUrl, false);
+    image.style.display = 'none';
+    fallback.style.display = 'block';
+  };
+  image.src = imageUrl;
+}
+
+async function preloadRoleImages(roles) {
+  const urls = [...new Set(roles.map((role) => ROLE_IMAGES[role]).filter(Boolean))]
+    .map((fileName) => `./wolfcard/${fileName}`);
+  await Promise.all(urls.map(preloadImage));
+}
+
+function preloadImage(url) {
+  if (roleImageCache.has(url)) {
+    return Promise.resolve(roleImageCache.get(url));
+  }
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      roleImageCache.set(url, true);
+      resolve(true);
+    };
+    image.onerror = () => {
+      roleImageCache.set(url, false);
+      resolve(false);
+    };
+    image.src = url;
+  });
+}
+
+async function startUndercover() {
+  try {
+    const totalPlayers = Number(document.querySelector('#undercover-players').value);
+    const undercoverCount = Number(document.querySelector('#undercover-count').value);
+    const data = await loadGameData('undercover');
+    const round = createUndercoverRound(data.wordPairs, totalPlayers, undercoverCount);
+    updateStore('undercover', {
+      status: 'dealing',
+      totalPlayers,
+      undercoverCount,
+      assignedWords: round.assignedWords,
+      currentPlayerIndex: 0,
+      revealed: false,
+    });
+    document.querySelector('#undercover-setup').classList.add('hidden');
+    document.querySelector('#undercover-play').classList.remove('hidden');
+    renderUndercover();
+    saveProgress('undercover', store.undercover);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+async function handleUndercoverAction() {
+  const game = store.undercover;
+  if (game.status !== 'dealing' || undercoverCardTransitioning) return;
+
+  if (!game.revealed) {
+    undercoverCardTransitioning = true;
+    setActionButtonBusy('undercover-action', true);
+    updateStore('undercover', { revealed: true });
+    renderUndercover();
+    await wait(CARD_FLIP_DURATION);
+    undercoverCardTransitioning = false;
+    setActionButtonBusy('undercover-action', false);
+    return;
+  }
+
+  undercoverCardTransitioning = true;
+  setActionButtonBusy('undercover-action', true);
+  const nextIndex = game.currentPlayerIndex + 1;
+  updateStore('undercover', { revealed: false });
+  renderUndercover();
+  await wait(CARD_FLIP_DURATION);
+
+  if (nextIndex >= game.totalPlayers) {
+    updateStore('undercover', { status: 'finished' });
+    undercoverCardTransitioning = false;
+    setActionButtonBusy('undercover-action', false);
+    stopBGM();
+    showResult('🕵️', '词语发放完成', '所有人依次描述自己的词语，找出卧底吧。');
+    return;
+  }
+
+  updateStore('undercover', { currentPlayerIndex: nextIndex });
+  renderUndercover();
+  saveProgress('undercover', store.undercover);
+  undercoverCardTransitioning = false;
+  setActionButtonBusy('undercover-action', false);
+}
+
+function renderUndercover() {
+  const game = store.undercover;
+  document.querySelector('#undercover-card').classList.toggle('revealed', game.revealed);
+  document.querySelector('#undercover-action').textContent = game.revealed
+    ? '我记住了，传给下一位'
+    : '查看词语';
+  document.querySelector('#undercover-player-label').textContent = `第 ${game.currentPlayerIndex + 1} 位玩家`;
+  document.querySelector('#undercover-progress-label').textContent = `${game.currentPlayerIndex + 1} / ${game.totalPlayers}`;
+  document.querySelector('#undercover-progress').style.width = `${((game.currentPlayerIndex + 1) / game.totalPlayers) * 100}%`;
+  document.querySelector('#undercover-word').textContent = game.assignedWords[game.currentPlayerIndex];
+}
+
+async function startCharades() {
+  // 隐藏时间选择页面
+  document.getElementById('charades-time-select').classList.add('hidden');
+  document.getElementById('charades-play').classList.remove('hidden');
+
+  // 显示横屏提示 Toast（2秒后自动消失，然后开始倒计时）
+  showLandscapeToast();
+
+  try {
+    await startCharadesRecording();
+    const data = await loadGameData('charades');
+    const deck = createCharadesThemeDeck(data.categories, selectedCharadesTheme);
+    updateStore('charades', {
+      status: 'countdown',
+      selectedTheme: selectedCharadesTheme,
+      duration: selectedCharadesDuration,
+      remainingSeconds: selectedCharadesDuration,
+      deck,
+      currentIndex: 0,
+      score: 0,
+      correctWords: [],
+      passedWords: [],
+    });
+    renderCharades();
+    // 等待 2 秒让 Toast 显示，然后开始倒计时
+    await wait(2000);
+    await runCountdown();
+    if (!isLandscape()) {
+      updateStore('charades', { status: 'waiting-orientation' });
+      charadesPausedForPortrait = true;
+      showOrientationGate();
+      return;
+    }
+    updateStore('charades', { status: 'playing' });
+    if (!store.app.isPaused) {
+      startCharadesTimer();
+    }
+  } catch (error) {
+    stopCharadesRecording({ discard: true });
+    showError(error);
+  }
+}
+
+// 横屏提示 Toast — 在倒计时前显示，2秒后自动消失
+function showLandscapeToast() {
+  // 移除已存在的 toast
+  const existing = document.getElementById('landscape-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'landscape-toast';
+  toast.textContent = '↻ 请将手机旋转至横屏模式以获得最佳体验';
+  Object.assign(toast.style, {
+    position: 'fixed',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    zIndex: '200',
+    padding: '16px 28px',
+    borderRadius: '16px',
+    background: 'rgba(0,0,0,0.78)',
+    color: '#fff',
+    fontSize: '18px',
+    fontWeight: '700',
+    textAlign: 'center',
+    maxWidth: '80%',
+    pointerEvents: 'none',
+    animation: 'fadeInOut 2s ease-in-out forwards',
+  });
+  document.body.appendChild(toast);
+
+  // 2秒后自动移除
+  setTimeout(() => {
+    if (toast.parentNode) toast.remove();
+  }, 2000);
+}
+
+function handleCharades(direction) {
+  const game = store.charades;
+  if (game.status !== 'playing') return;
+  const current = game.deck[game.currentIndex];
+  const correct = direction === 'up';
+  const nextIndex = game.currentIndex + 1;
+  const patch = {
+    currentIndex: nextIndex >= game.deck.length ? 0 : nextIndex,
+    score: game.score + (correct ? 1 : 0),
+    correctWords: correct ? [...game.correctWords, current.word] : game.correctWords,
+    passedWords: correct ? game.passedWords : [...game.passedWords, current.word],
+    deck: nextIndex >= game.deck.length ? shuffle(game.deck) : game.deck,
+  };
+  updateStore('charades', patch);
+  renderCharades();
+  saveProgress('charades', store.charades);
+
+  // 我的版本：更新进度条
+  const total = game.deck.length;
+  const answered = patch.correctWords.length + patch.passedWords.length;
+  updateCharadesProgress(answered, total);
+}
+
+function renderCharades() {
+  const game = store.charades;
+  const current = game.deck[game.currentIndex];
+  document.querySelector('#charades-time').textContent = formatTime(game.remainingSeconds);
+  document.querySelector('#charades-score').textContent = String(game.score);
+  document.querySelector('#charades-word').textContent = current?.word ?? '准备开始';
+  document.querySelector('#charades-category').textContent = CATEGORY_LABELS[current?.category] ?? '题目';
+}
+
+function startCharadesTimer() {
+  stopCharadesTimer();
+  charadesTimer = window.setInterval(() => {
+    const remainingSeconds = Math.max(0, store.charades.remainingSeconds - 1);
+    updateStore('charades', { remainingSeconds });
+    renderCharades();
+    if (remainingSeconds === 0) finishCharades();
+  }, 1000);
+}
+
+function stopCharadesTimer() {
+  if (charadesTimer) {
+    window.clearInterval(charadesTimer);
+    charadesTimer = null;
+  }
+}
+
+function handleOrientationLayoutChange() {
+  if (store.app.activePage !== 'charades') return;
+
+  if (!isLandscape()) {
+    showOrientationGate();
+    if (store.charades.status === 'playing') {
+      stopCharadesTimer();
+      charadesPausedForPortrait = true;
+    }
+    return;
+  }
+
+  hideOrientationGate();
+  if (store.charades.status === 'waiting-orientation') {
+    charadesPausedForPortrait = false;
+    updateStore('charades', { status: 'playing' });
+    if (!store.app.isPaused) {
+      startCharadesTimer();
+    }
+    return;
+  }
+  if (charadesPausedForPortrait && store.charades.status === 'playing' && !store.app.isPaused) {
+    charadesPausedForPortrait = false;
+    startCharadesTimer();
+  }
+}
+
+function togglePause() {
+  const currentState = store.app.isPaused;
+  const newState = !currentState;
+  updateStore('app', { isPaused: newState });
+
+  pauseButton.textContent = newState ? '▶️' : '⏸️';
+
+  // 针对"你划我猜"的特殊处理：暂停/恢复定时器
+  if (store.app.activePage === 'charades') {
+    gestureController?.setEnabled(!newState);
+    if (newState) {
+      stopCharadesTimer(); // 暂停：清除定时器
+      pauseCharadesRecording();
+    } else if (store.charades.status === 'playing' && isLandscape()) {
+      startCharadesTimer(); // 恢复：重启定时器
+      resumeCharadesRecording();
+    }
+  }
+
+  // 可选：给 body 加个 class 方便成员 D 做暗化 UI
+  document.body.classList.toggle('game-paused', newState);
+}
+
+function exitCurrentGame() {
+  // 退出游戏就是进行一次彻底的重置并返回主页
+  updateStore('app', { isPaused: false });
+  document.body.classList.remove('game-paused');
+  pauseButton.textContent = '⏸️'; // 重置按钮图标
+  navigateHome(); // navigateHome 里已经包含了 stopCharadesTimer() 和 stopBGM()
+}
+
+function isLandscape() {
+  return window.innerWidth > window.innerHeight;
+}
+
+function showOrientationGate() {
+  orientationGate.classList.remove('hidden');
+}
+
+function hideOrientationGate() {
+  orientationGate.classList.add('hidden');
+}
+
+function finishCharades() {
+  stopCharadesTimer();
+  stopCharadesRecording();
+  updateStore('charades', { status: 'ended' });
+  const game = store.charades;
+  const summary = createCharadesSummary(game);
+  const correctDetails = summary.correctWords.length
+    ? summary.correctWords.join('、')
+    : '无';
+  const incorrectDetails = summary.incorrectWords.length
+    ? summary.incorrectWords.join('、')
+    : '无';
+  const details = `猜对 ${summary.correctCount} 个：${correctDetails}\n猜错 ${summary.incorrectCount} 个：${incorrectDetails}`;
+  showResult(
+    '🎉',
+    `本轮得分 ${summary.score}`,
+    details,
+  );
+
+  // 我的版本：在结果弹窗中展示详细词语列表
+  showCharadesEndSummary(summary.correctWords, summary.incorrectWords);
+}
+
+async function runCountdown() {
+  const overlay = document.querySelector('#countdown');
+  overlay.classList.remove('hidden');
+  for (const value of ['3', '2', '1', '开始']) {
+    overlay.textContent = value;
+    await wait(value === '开始' ? 500 : 800);
+  }
+  overlay.classList.add('hidden');
+}
+
+function handleGesture(direction) {
+  if (store.app.isPaused) return;
+  const page = store.app.activePage;
+  if (page !== 'charades') return;
+  if (store.charades.status !== 'playing') return;
+  provideFeedback(direction);
+  playEffect(direction === 'up' ? 'correct' : 'skip');
+  handleCharades(direction);
+}
+
+async function startCharadesRecording() {
+  if (!charadesMediaStatus) return;
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    charadesMediaStatus.textContent = '当前浏览器不支持录音录像，仍可继续游戏';
+    return;
+  }
+
+  charadesMediaStatus.textContent = '正在申请麦克风和摄像头权限…';
+  try {
+    charadesMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    charadesRecordingChunks = [];
+    discardCharadesRecording = false;
+
+    const mimeType = getSupportedRecordingMimeType();
+    charadesMediaRecorder = mimeType
+      ? new MediaRecorder(charadesMediaStream, { mimeType })
+      : new MediaRecorder(charadesMediaStream);
+    charadesMediaRecorder.addEventListener('dataavailable', (event) => {
+      if (event.data.size > 0) {
+        charadesRecordingChunks.push(event.data);
+      }
+    });
+    charadesMediaRecorder.addEventListener('stop', saveCharadesRecording);
+    charadesMediaRecorder.start(1000);
+    charadesMediaStatus.textContent = '正在录音录像，游戏结束后将自动保存';
+  } catch (error) {
+    console.warn('[charades] Media permission was not granted:', error);
+    releaseCharadesMediaStream();
+    charadesMediaStatus.textContent = '未获得录音录像权限，仍可继续游戏';
+  }
+}
+
+function pauseCharadesRecording() {
+  if (charadesMediaRecorder?.state === 'recording') {
+    charadesMediaRecorder.pause();
+    charadesMediaStatus.textContent = '游戏已暂停，录音录像同步暂停';
+  }
+}
+
+function resumeCharadesRecording() {
+  if (charadesMediaRecorder?.state === 'paused') {
+    charadesMediaRecorder.resume();
+    charadesMediaStatus.textContent = '正在录音录像，游戏结束后将自动保存';
+  }
+}
+
+function stopCharadesRecording({ discard = false } = {}) {
+  if (!charadesMediaRecorder) {
+    releaseCharadesMediaStream();
+    return;
+  }
+
+  discardCharadesRecording = discardCharadesRecording || discard;
+  if (charadesMediaRecorder.state !== 'inactive') {
+    charadesMediaRecorder.stop();
+  }
+}
+
+function saveCharadesRecording() {
+  const recorder = charadesMediaRecorder;
+  const chunks = charadesRecordingChunks;
+  const shouldDiscard = discardCharadesRecording;
+  charadesMediaRecorder = null;
+  charadesRecordingChunks = [];
+  discardCharadesRecording = false;
+  releaseCharadesMediaStream();
+
+  if (shouldDiscard || chunks.length === 0) return;
+
+  const mimeType = recorder.mimeType || chunks[0].type || 'video/webm';
+  const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+  const blob = new Blob(chunks, { type: mimeType });
+  const downloadUrl = URL.createObjectURL(blob);
+  const downloadLink = document.createElement('a');
+  downloadLink.href = downloadUrl;
+  downloadLink.download = `你划我猜-${formatRecordingTime(new Date())}.${extension}`;
+  document.body.append(downloadLink);
+  downloadLink.click();
+  downloadLink.remove();
+  window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+  charadesMediaStatus.textContent = '录像已生成，请在手机"下载"中查看';
+}
+
+function releaseCharadesMediaStream() {
+  charadesMediaStream?.getTracks().forEach((track) => track.stop());
+  charadesMediaStream = null;
+}
+
+function getSupportedRecordingMimeType() {
+  if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
+  return [
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ].find((type) => MediaRecorder.isTypeSupported(type)) ?? '';
+}
+
+function formatRecordingTime(date) {
+  const parts = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+    String(date.getHours()).padStart(2, '0'),
+    String(date.getMinutes()).padStart(2, '0'),
+    String(date.getSeconds()).padStart(2, '0'),
+  ];
+  return `${parts.slice(0, 3).join('')}-${parts.slice(3).join('')}`;
+}
+
+function provideFeedback(direction) {
+  feedbackFlash.className = `feedback-flash ${direction}`;
+  window.setTimeout(() => { feedbackFlash.className = 'feedback-flash'; }, 300);
+  if (navigator.vibrate) {
+    navigator.vibrate(direction === 'up' ? 55 : [35, 35, 35]);
+  }
+}
+
+function syncGestureStatus() {
+  const status = gestureController && gestureController.getStatus
+    ? gestureController.getStatus()
+    : 'initializing';
+  updateStore('app', { gestureStatus: status });
+  const active = status === 'active';
+  const needsPermission = status === 'permission-required'
+    || status === 'permission-denied'
+    || status === 'permission-error';
+  gestureEnable.classList.toggle('hidden', !needsPermission);
+  if (active) {
+    gestureStatus.textContent = '体感操作已连接，按钮仍可备用';
+  } else if (needsPermission) {
+    gestureStatus.textContent = '点击启用手机翻转，或直接使用下方按钮';
+  } else {
+    gestureStatus.textContent = '体感操作不可用，请使用按钮';
+  }
+}
+
+async function requestGesturePermission() {
+  gestureEnable.disabled = true;
+  gestureEnable.textContent = '正在请求权限…';
+  try {
+    await gestureController.requestPermission();
+  } finally {
+    gestureEnable.disabled = false;
+    gestureEnable.textContent = '启用手机翻转';
+    syncGestureStatus();
+  }
+}
+
+function showResult(icon, title, message, details = '') {
+  document.querySelector('#result-icon').textContent = icon;
+  document.querySelector('#result-title').textContent = title;
+  document.querySelector('#result-message').textContent = message;
+  document.querySelector('#result-details').textContent = details;
+  modal.classList.remove('hidden');
+  currentResultAction = navigateHome;
+}
+
+function showError(error) {
+  console.error(error);
+  showResult('⚠️', '加载失败', '请通过本地服务器打开项目后重试。', error.message);
+}
+
+function closeResult() {
+  modal.classList.add('hidden');
+}
+
+function formatTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+}
+
+function setActionButtonBusy(buttonId, busy) {
+  const button = document.querySelector(`#${buttonId}`);
+  button.disabled = busy;
+  button.setAttribute('aria-busy', String(busy));
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+// ============================================================
+//  角色介绍功能（狼人杀翻牌后显示角色说明）
+// ============================================================
+// 缓存角色描述数据，在 startWerewolf 时加载
+let werewolfRoleDescriptionsCache = {};
+
+function showWerewolfRoleInfo() {
+  const game = store.werewolf;
+  if (game.status !== 'dealing') return;
+  const role = game.assignedRoles[game.currentPlayerIndex];
+  const roleInfo = getWerewolfRoleDescription({ roleDescriptions: werewolfRoleDescriptionsCache }, role);
+  if (!roleInfo) {
+    showResult('📖', role, '暂无该角色的详细介绍。');
+    return;
+  }
+
+  document.querySelector('#role-info-icon').textContent = ROLE_EMOJI[role] ?? '🎴';
+  document.querySelector('#role-info-title').textContent = role;
+  document.querySelector('#role-info-camp').textContent = `阵营：${roleInfo.camp}`;
+  document.querySelector('#role-info-gameplay').textContent = roleInfo.gameplay;
+  document.querySelector('#role-info-skill').textContent = `技能：${roleInfo.skill}`;
+  document.querySelector('#role-info-modal').classList.remove('hidden');
+}
+
+function closeWerewolfRoleInfo() {
+  document.querySelector('#role-info-modal').classList.add('hidden');
+}
