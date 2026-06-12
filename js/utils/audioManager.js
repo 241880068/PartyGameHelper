@@ -3,7 +3,7 @@ import { store, updateStore } from '../store.js';
 
 let audioUnlocked = false;
 
-// 当前正在播放的 BGM 类型（'werewolf' | 'spy' | 'charades' | null）
+// 当前正在播放的 BGM 类型（'werewolf' | 'undercover' | 'charades' | null）
 let currentBGMType = null;
 
 const getAudioElements = () => ({
@@ -52,7 +52,7 @@ export function toggleMute() {
 
 /**
  * 播放指定游戏的背景音乐
- * @param {'werewolf' | 'spy' | 'charades'} gameType - 游戏类型
+ * @param {'werewolf' | 'undercover' | 'charades'} gameType - 游戏类型
  */
 export function playBGM(gameType) {
   // 如果已经播放同一首，不重复切换
@@ -67,7 +67,7 @@ export function playBGM(gameType) {
   // 根据游戏类型选择音乐文件
   const musicMap = {
     werewolf: './music/发牌.mp3',
-    spy: './music/发牌.mp3',
+    undercover: './music/发牌.mp3',
     charades: './music/你划我猜.mp3',
   };
   const src = musicMap[gameType];

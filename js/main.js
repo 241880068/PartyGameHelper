@@ -86,6 +86,7 @@ let selectedCharadesTheme = 'film_tv';
 let selectedCharadesRecordingMode = null;
 let currentResultAction = navigateHome;
 let charadesPausedForPortrait = false;
+let charadesWaitingToStartInLandscape = false;
 let charadesMediaStream = null;
 let charadesMediaRecorder = null;
 let charadesRecordingChunks = [];
@@ -287,6 +288,7 @@ function navigateHome() {
   }
   hideOrientationGate();
   charadesPausedForPortrait = false;
+  charadesWaitingToStartInLandscape = false;
   store.app.activePage = 'home';
   document.body.classList.remove('game-page-active');
   pages.forEach((page) => page.classList.toggle('active', page.id === 'page-home'));
@@ -311,9 +313,10 @@ function hideBackConfirmation() {
 }
 
 function handleBackButton() {
-  const isCharadesThemeSelection = store.app.activePage === 'charades'
-    && !document.getElementById('charades-setup').classList.contains('hidden');
-  if (isCharadesThemeSelection) {
+  const activePage = store.app.activePage;
+  const isInitialSetupPage = ['werewolf', 'undercover', 'charades'].includes(activePage)
+    && !document.getElementById(`${activePage}-setup`).classList.contains('hidden');
+  if (isInitialSetupPage) {
     navigateHome();
     return;
   }
@@ -330,6 +333,7 @@ function resetGameView(gameType) {
   if (gameType === 'charades') {
     releaseCharadesMediaStream();
     selectedCharadesRecordingMode = null;
+    charadesWaitingToStartInLandscape = false;
     document.querySelectorAll('[data-recording-mode]').forEach((button) => {
       button.classList.remove('selected');
       button.setAttribute('aria-checked', 'false');
@@ -564,11 +568,13 @@ function renderUndercover() {
 
 async function startCharades() {
   if (!isLandscape()) {
+    charadesWaitingToStartInLandscape = true;
     charadesMediaStatus.textContent = '请先将手机旋转为横屏，再开始游戏';
     showOrientationGate();
     return;
   }
 
+  charadesWaitingToStartInLandscape = false;
   hideOrientationGate();
   // 隐藏时间选择页面
   document.getElementById('charades-time-select').classList.add('hidden');
@@ -717,6 +723,11 @@ function handleOrientationLayoutChange() {
   }
 
   hideOrientationGate();
+  if (charadesWaitingToStartInLandscape) {
+    charadesWaitingToStartInLandscape = false;
+    startCharades();
+    return;
+  }
   if (store.charades.status === 'waiting-orientation') {
     charadesPausedForPortrait = false;
     updateStore('charades', { status: 'playing' });
