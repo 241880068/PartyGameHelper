@@ -155,9 +155,6 @@
             <span class="theme-label">动物</span>
           </button>
         </div>
-        <p id="charades-media-status" class="gesture-hint" role="status">
-          开始游戏时将申请麦克风和摄像头权限，结束后自动保存录像
-        </p>
       </div>
 
       <!-- 第二步：时间选择（主题选择后显示） -->
@@ -168,6 +165,20 @@
           <button type="button" data-duration="120" class="selected">2 分钟</button>
           <button type="button" data-duration="180">3 分钟</button>
         </div>
+        <p class="section-label recording-label">选择录制方式</p>
+        <div class="recording-options" role="radiogroup" aria-label="录制方式">
+          <button type="button" data-recording-mode="video" role="radio" aria-checked="false">
+            <span class="recording-icon" aria-hidden="true">📷</span>
+            <span>相机<br><small>横屏 MP4 视频</small></span>
+          </button>
+          <button type="button" data-recording-mode="audio" role="radio" aria-checked="false">
+            <span class="recording-icon" aria-hidden="true">🎙️</span>
+            <span>话筒<br><small>仅录制 MP3 音频</small></span>
+          </button>
+        </div>
+        <p id="charades-media-status" class="gesture-hint" role="status">
+          录制为可选项，也可以直接开始游戏
+        </p>
         <button id="charades-start" class="primary-button orange" type="button">开始游戏</button>
       </div>
       <div id="charades-play" class="charades-play hidden">
@@ -227,6 +238,19 @@
       <p id="result-message"></p>
       <div id="result-details" class="result-details"></div>
       <button id="result-confirm" class="primary-button" type="button">返回主页</button>
+    </div>
+  </div>
+
+  <!-- 返回确认弹窗 -->
+  <div id="back-confirm-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="back-confirm-title">
+    <div class="modal-card">
+      <span class="result-icon">⚠️</span>
+      <h2 id="back-confirm-title">确定返回吗？</h2>
+      <p>返回主页后，当前游戏进度将会丢失。</p>
+      <div class="confirm-actions">
+        <button id="back-confirm-cancel" class="secondary-button" type="button">取消</button>
+        <button id="back-confirm-submit" class="primary-button" type="button">确定返回</button>
+      </div>
     </div>
   </div>
 

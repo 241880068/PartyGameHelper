@@ -73,6 +73,7 @@ const feedbackFlash = document.querySelector('#feedback-flash');
 const modal = document.querySelector('#result-modal');
 const orientationGate = document.querySelector('#orientation-gate');
 const charadesMediaStatus = document.querySelector('#charades-media-status');
+const backConfirmModal = document.querySelector('#back-confirm-modal');
 
 const pauseButton = document.querySelector('#pause-button');
 const exitButton = document.querySelector('#exit-button');
@@ -82,12 +83,14 @@ let charadesTimer;
 let selectedWerewolfPlayers = 6;
 let selectedCharadesDuration = 120;
 let selectedCharadesTheme = 'film_tv';
+let selectedCharadesRecordingMode = null;
 let currentResultAction = navigateHome;
 let charadesPausedForPortrait = false;
 let charadesMediaStream = null;
 let charadesMediaRecorder = null;
 let charadesRecordingChunks = [];
 let discardCharadesRecording = false;
+let activeCharadesRecordingMode = null;
 let roleImageRenderId = 0;
 const roleImageCache = new Map();
 const CARD_FLIP_DURATION = 580;
@@ -114,7 +117,12 @@ function bindEvents() {
   document.querySelectorAll('[data-game]').forEach((button) => {
     button.addEventListener('click', () => navigate(button.dataset.game));
   });
-  backButton.addEventListener('click', navigateHome);
+  backButton.addEventListener('click', handleBackButton);
+  document.querySelector('#back-confirm-cancel').addEventListener('click', hideBackConfirmation);
+  document.querySelector('#back-confirm-submit').addEventListener('click', () => {
+    hideBackConfirmation();
+    navigateHome();
+  });
   document.querySelector('#werewolf-start').addEventListener('click', startWerewolf);
   document.querySelector('#werewolf-action').addEventListener('click', handleWerewolfAction);
   document.querySelector('#undercover-start').addEventListener('click', startUndercover);
@@ -150,6 +158,10 @@ function bindEvents() {
       button.classList.add('selected');
       selectedCharadesDuration = Number(button.dataset.duration);
     });
+  });
+
+  document.querySelectorAll('[data-recording-mode]').forEach((button) => {
+    button.addEventListener('click', () => requestCharadesMediaPermission(button));
   });
 
   // 我的版本：主题网格选择（每行两个的 theme-list）
@@ -290,6 +302,24 @@ function navigateHome() {
   stopBGM();
 }
 
+function showBackConfirmation() {
+  backConfirmModal.classList.remove('hidden');
+}
+
+function hideBackConfirmation() {
+  backConfirmModal.classList.add('hidden');
+}
+
+function handleBackButton() {
+  const isCharadesThemeSelection = store.app.activePage === 'charades'
+    && !document.getElementById('charades-setup').classList.contains('hidden');
+  if (isCharadesThemeSelection) {
+    navigateHome();
+    return;
+  }
+  showBackConfirmation();
+}
+
 function resetGameView(gameType) {
   resetStoreSection(gameType);
   document.querySelector(`#${gameType}-setup`).classList.remove('hidden');
@@ -298,6 +328,15 @@ function resetGameView(gameType) {
 
   // 你划我猜特殊处理：重置为第一步（主题选择），隐藏时间选择
   if (gameType === 'charades') {
+    releaseCharadesMediaStream();
+    selectedCharadesRecordingMode = null;
+    document.querySelectorAll('[data-recording-mode]').forEach((button) => {
+      button.classList.remove('selected');
+      button.setAttribute('aria-checked', 'false');
+      button.disabled = false;
+    });
+    document.getElementById('charades-start').disabled = false;
+    charadesMediaStatus.textContent = '录制为可选项，也可以直接开始游戏';
     document.getElementById('charades-setup').classList.remove('hidden');
     document.getElementById('charades-time-select').classList.add('hidden');
   }
@@ -524,6 +563,13 @@ function renderUndercover() {
 }
 
 async function startCharades() {
+  if (!isLandscape()) {
+    charadesMediaStatus.textContent = '请先将手机旋转为横屏，再开始游戏';
+    showOrientationGate();
+    return;
+  }
+
+  hideOrientationGate();
   // 隐藏时间选择页面
   document.getElementById('charades-time-select').classList.add('hidden');
   document.getElementById('charades-play').classList.remove('hidden');
@@ -532,7 +578,9 @@ async function startCharades() {
   showLandscapeToast();
 
   try {
-    await startCharadesRecording();
+    if (selectedCharadesRecordingMode && hasLiveCharadesMediaStream()) {
+      await startCharadesRecording();
+    }
     const data = await loadGameData('charades');
     const deck = createCharadesThemeDeck(data.categories, selectedCharadesTheme);
     updateStore('charades', {
@@ -663,6 +711,7 @@ function handleOrientationLayoutChange() {
     if (store.charades.status === 'playing') {
       stopCharadesTimer();
       charadesPausedForPortrait = true;
+      pauseCharadesRecording('已切换为竖屏，录制已暂停');
     }
     return;
   }
@@ -674,12 +723,14 @@ function handleOrientationLayoutChange() {
     renderCharades();
     if (!store.app.isPaused) {
       startCharadesTimer();
+      resumeCharadesRecording();
     }
     return;
   }
   if (charadesPausedForPortrait && store.charades.status === 'playing' && !store.app.isPaused) {
     charadesPausedForPortrait = false;
     startCharadesTimer();
+    resumeCharadesRecording();
   }
 }
 
@@ -776,16 +827,26 @@ async function startCharadesRecording() {
     return;
   }
 
-  charadesMediaStatus.textContent = '正在申请麦克风和摄像头权限…';
+  const mode = selectedCharadesRecordingMode;
+  const mimeType = getSupportedRecordingMimeType(mode);
+  if (!mimeType) {
+    charadesMediaStatus.textContent = mode === 'video'
+      ? '当前浏览器不能生成 MP4，游戏将继续但不会录制'
+      : '当前浏览器不能生成 MP3，游戏将继续但不会录音';
+    return;
+  }
+
+  if (!hasLiveCharadesMediaStream()) {
+    charadesMediaStatus.textContent = '媒体权限已失效，请重新点击相机或话筒授权';
+    return;
+  }
+
   try {
-    charadesMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
     charadesRecordingChunks = [];
     discardCharadesRecording = false;
+    activeCharadesRecordingMode = mode;
 
-    const mimeType = getSupportedRecordingMimeType();
-    charadesMediaRecorder = mimeType
-      ? new MediaRecorder(charadesMediaStream, { mimeType })
-      : new MediaRecorder(charadesMediaStream);
+    charadesMediaRecorder = new MediaRecorder(charadesMediaStream, { mimeType });
     charadesMediaRecorder.addEventListener('dataavailable', (event) => {
       if (event.data.size > 0) {
         charadesRecordingChunks.push(event.data);
@@ -793,25 +854,108 @@ async function startCharadesRecording() {
     });
     charadesMediaRecorder.addEventListener('stop', saveCharadesRecording);
     charadesMediaRecorder.start(1000);
-    charadesMediaStatus.textContent = '正在录音录像，游戏结束后将自动保存';
+    charadesMediaStatus.textContent = mode === 'video'
+      ? '正在录制横屏 MP4 视频，游戏结束后自动保存'
+      : '正在录制 MP3 音频，游戏结束后自动保存';
   } catch (error) {
-    console.warn('[charades] Media permission was not granted:', error);
+    console.warn('[charades] Recording could not start:', error);
     releaseCharadesMediaStream();
-    charadesMediaStatus.textContent = '未获得录音录像权限，仍可继续游戏';
+    activeCharadesRecordingMode = null;
+    charadesMediaStatus.textContent = '录制启动失败，游戏将继续但不会生成文件';
   }
 }
 
-function pauseCharadesRecording() {
+async function requestCharadesMediaPermission(button) {
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    charadesMediaStatus.textContent = '当前浏览器不支持录音录像';
+    return;
+  }
+
+  const mode = button.dataset.recordingMode;
+  if (mode === 'video' && !isLandscape()) {
+    charadesMediaStatus.textContent = '请先将手机旋转为横屏，再点击相机授权';
+    showOrientationGate();
+    return;
+  }
+
+  hideOrientationGate();
+  releaseCharadesMediaStream();
+  selectedCharadesRecordingMode = null;
+  document.getElementById('charades-start').disabled = true;
+  document.querySelectorAll('[data-recording-mode]').forEach((item) => {
+    item.classList.remove('selected');
+    item.setAttribute('aria-checked', 'false');
+    item.disabled = true;
+  });
+  charadesMediaStatus.textContent = mode === 'video'
+    ? '正在申请摄像头和麦克风权限…'
+    : '正在申请麦克风权限…';
+
+  try {
+    const constraints = mode === 'video'
+      ? {
+          audio: true,
+          video: {
+            aspectRatio: { ideal: 16 / 9 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+        }
+      : { audio: true, video: false };
+    charadesMediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+    if (!getSupportedRecordingMimeType(mode)) {
+      releaseCharadesMediaStream();
+      charadesMediaStatus.textContent = mode === 'video'
+        ? '权限已允许，但当前浏览器不能生成 MP4'
+        : '权限已允许，但当前浏览器不能生成 MP3';
+      return;
+    }
+
+    selectedCharadesRecordingMode = mode;
+    button.classList.add('selected');
+    button.setAttribute('aria-checked', 'true');
+    document.getElementById('charades-start').disabled = false;
+    charadesMediaStatus.textContent = mode === 'video'
+      ? '相机和麦克风已授权，将录制横屏 MP4 视频'
+      : '麦克风已授权，将仅录制 MP3 音频';
+  } catch (error) {
+    console.warn('[charades] Media permission was not granted:', error);
+    releaseCharadesMediaStream();
+    charadesMediaStatus.textContent = mode === 'video'
+      ? '未获得摄像头或麦克风权限，请点击相机重试'
+      : '未获得麦克风权限，请点击话筒重试';
+  } finally {
+    document.querySelectorAll('[data-recording-mode]').forEach((item) => {
+      item.disabled = false;
+    });
+    document.getElementById('charades-start').disabled = false;
+  }
+}
+
+function hasLiveCharadesMediaStream() {
+  if (!charadesMediaStream) return false;
+  const hasLiveAudio = charadesMediaStream.getAudioTracks()
+    .some((track) => track.readyState === 'live');
+  if (selectedCharadesRecordingMode === 'audio') return hasLiveAudio;
+  const hasLiveVideo = charadesMediaStream.getVideoTracks()
+    .some((track) => track.readyState === 'live');
+  return hasLiveAudio && hasLiveVideo;
+}
+
+function pauseCharadesRecording(message = '游戏已暂停，录制同步暂停') {
   if (charadesMediaRecorder?.state === 'recording') {
     charadesMediaRecorder.pause();
-    charadesMediaStatus.textContent = '游戏已暂停，录音录像同步暂停';
+    charadesMediaStatus.textContent = message;
   }
 }
 
 function resumeCharadesRecording() {
   if (charadesMediaRecorder?.state === 'paused') {
     charadesMediaRecorder.resume();
-    charadesMediaStatus.textContent = '正在录音录像，游戏结束后将自动保存';
+    charadesMediaStatus.textContent = activeCharadesRecordingMode === 'video'
+      ? '正在录制横屏 MP4 视频，游戏结束后自动保存'
+      : '正在录制 MP3 音频，游戏结束后自动保存';
   }
 }
 
@@ -831,25 +975,28 @@ function saveCharadesRecording() {
   const recorder = charadesMediaRecorder;
   const chunks = charadesRecordingChunks;
   const shouldDiscard = discardCharadesRecording;
+  const recordingMode = activeCharadesRecordingMode;
   charadesMediaRecorder = null;
   charadesRecordingChunks = [];
   discardCharadesRecording = false;
+  activeCharadesRecordingMode = null;
   releaseCharadesMediaStream();
 
   if (shouldDiscard || chunks.length === 0) return;
 
-  const mimeType = recorder.mimeType || chunks[0].type || 'video/webm';
-  const extension = mimeType.includes('mp4') ? 'mp4' : 'webm';
+  const isVideo = recordingMode === 'video';
+  const mimeType = recorder.mimeType || chunks[0].type || (isVideo ? 'video/mp4' : 'audio/mpeg');
+  const extension = isVideo ? 'mp4' : 'mp3';
   const blob = new Blob(chunks, { type: mimeType });
   const downloadUrl = URL.createObjectURL(blob);
   const downloadLink = document.createElement('a');
   downloadLink.href = downloadUrl;
-  downloadLink.download = `你划我猜-${formatRecordingTime(new Date())}.${extension}`;
+  downloadLink.download = `你划我猜-${isVideo ? '视频' : '录音'}-${formatRecordingTime(new Date())}.${extension}`;
   document.body.append(downloadLink);
   downloadLink.click();
   downloadLink.remove();
   window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-  charadesMediaStatus.textContent = '录像已生成，请在手机"下载"中查看';
+  charadesMediaStatus.textContent = `${isVideo ? 'MP4 视频' : 'MP3 录音'}已生成，请在手机“下载”中查看`;
 }
 
 function releaseCharadesMediaStream() {
@@ -857,14 +1004,16 @@ function releaseCharadesMediaStream() {
   charadesMediaStream = null;
 }
 
-function getSupportedRecordingMimeType() {
+function getSupportedRecordingMimeType(mode) {
   if (typeof MediaRecorder.isTypeSupported !== 'function') return '';
-  return [
-    'video/mp4',
-    'video/webm;codecs=vp9,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm',
-  ].find((type) => MediaRecorder.isTypeSupported(type)) ?? '';
+  const candidates = mode === 'video'
+    ? [
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+        'video/mp4;codecs=avc1,mp4a.40.2',
+        'video/mp4',
+      ]
+    : ['audio/mpeg', 'audio/mp3'];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? '';
 }
 
 function formatRecordingTime(date) {
