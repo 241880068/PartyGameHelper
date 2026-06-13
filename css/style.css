@@ -379,12 +379,41 @@ main { width: min(100%, 620px); margin: 0 auto; padding: 4px 18px calc(112px + e
 .orientation-gate > span { color: var(--orange); font-size: 80px; }
 .orientation-gate h2 { margin: 12px 0 8px; font-size: 30px; color: var(--text); }
 .orientation-gate p { max-width: 360px; margin: 0; color: var(--muted); line-height: 1.6; }
-.modal { padding: 24px; }
-.modal-card { width: min(100%, 420px); padding: 30px; border: 1px solid rgba(0,0,0,.06); border-radius: 28px; background: var(--panel); text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.12); }
+.modal {
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+  overflow-y: auto;
+}
+.modal-card {
+  display: flex;
+  width: min(100%, 420px);
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  padding: 30px;
+  flex-direction: column;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: 28px;
+  background: var(--panel);
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.12);
+}
 .modal-card h2 { margin: 12px 0 8px; }
 .modal-card p { color: var(--muted); line-height: 1.55; }
 .result-icon { font-size: 54px; }
-.result-details { max-height: 180px; margin: 18px 0; overflow: auto; color: var(--text); font-size: 14px; line-height: 1.65; }
+.result-details {
+  min-height: 0;
+  max-height: 180px;
+  margin: 18px 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
+}
+#result-confirm { flex: 0 0 auto; }
 .confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 22px; }
 .secondary-button { min-height: 54px; border: 1px solid rgba(0,0,0,.1); border-radius: 16px; color: var(--text); background: var(--panel-2); font-weight: 800; }
 
@@ -451,6 +480,39 @@ main { width: min(100%, 620px); margin: 0 auto; padding: 4px 18px calc(112px + e
 }
 
 @media (orientation: landscape) and (max-height: 600px) {
+  #result-modal {
+    place-items: start center;
+  }
+  #result-modal .modal-card {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+    padding: 14px 22px;
+    border-radius: 20px;
+  }
+  #result-modal .result-icon {
+    font-size: 32px;
+    line-height: 1;
+  }
+  #result-modal .modal-card h2 {
+    margin: 5px 0 2px;
+    font-size: 20px;
+  }
+  #result-modal .modal-card > p {
+    margin: 2px 0;
+    line-height: 1.35;
+  }
+  #result-modal .result-details {
+    max-height: none;
+    margin: 6px 0 8px;
+  }
+  #result-modal .result-details p {
+    margin: 4px 0;
+    line-height: 1.4;
+  }
+  #result-modal #result-confirm {
+    min-height: 44px;
+  }
+
   body.game-page-active main {
     padding-top: 0;
     padding-bottom: calc(92px + env(safe-area-inset-bottom));
