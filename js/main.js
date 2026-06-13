@@ -281,9 +281,8 @@ function navigate(gameType) {
   gestureControls.classList.toggle('hidden', gameType !== 'charades');
   resetGameView(gameType);
 
-  // 进入游戏页面时自动播放对应的背景音乐
-  // 狼人杀和谁是卧底使用 发牌.mp3，你划我猜使用 你划我猜.mp3
-  playBGM(gameType);
+  // 配置阶段保持安静，点击开始并真正进入游戏后再播放背景音乐。
+  stopBGM();
 }
 
 function navigateHome() {
@@ -371,6 +370,7 @@ async function startWerewolf() {
     document.querySelector('#werewolf-setup').classList.add('hidden');
     document.querySelector('#werewolf-play').classList.remove('hidden');
     renderWerewolf();
+    playBGM('werewolf');
     saveProgress('werewolf', store.werewolf);
   } catch (error) {
     showError(error);
@@ -514,6 +514,7 @@ async function startUndercover() {
     document.querySelector('#undercover-setup').classList.add('hidden');
     document.querySelector('#undercover-play').classList.remove('hidden');
     renderUndercover();
+    playBGM('undercover');
     saveProgress('undercover', store.undercover);
   } catch (error) {
     showError(error);
@@ -604,6 +605,7 @@ async function startCharades() {
       passedWords: [],
     });
     renderCharades();
+    playBGM('charades');
     // 等待 2 秒让 Toast 显示，然后开始倒计时
     await wait(2000);
     await runCountdown();
