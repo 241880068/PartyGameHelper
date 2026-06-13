@@ -66,10 +66,11 @@ export function getWerewolfRoleDescription(data, role) {
 }
 
 export function getUndercoverCount(playerCount) {
-  if (!Number.isInteger(playerCount) || playerCount < 6 || playerCount > 15) {
-    throw new RangeError('playerCount must be an integer between 6 and 15');
+  if (!Number.isInteger(playerCount) || playerCount < 4 || playerCount > 15) {
+    throw new RangeError('playerCount must be an integer between 4 and 15');
   }
 
+  if (playerCount <= 5) return 1;
   return Math.round((playerCount - 3) / 3);
 }
 
@@ -82,8 +83,8 @@ export function createUndercoverRound(
   if (!Array.isArray(wordPairs) || wordPairs.length === 0) {
     throw new TypeError('At least one word pair is required');
   }
-  if (!Number.isInteger(playerCount) || playerCount < 6 || playerCount > 15) {
-    throw new RangeError('playerCount must be an integer between 6 and 15');
+  if (!Number.isInteger(playerCount) || playerCount < 4 || playerCount > 15) {
+    throw new RangeError('playerCount must be an integer between 4 and 15');
   }
   if (
     !Number.isInteger(undercoverCount)
